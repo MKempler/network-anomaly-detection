@@ -98,3 +98,44 @@ def score_events(labels: np.ndarray, flags: np.ndarray, merge_gap: int = 0) -> E
 def combine(scores: list[EventScores]) -> EventScores:
     """Pool event counts across servers (micro-average)."""
     return sum(scores, EMPTY)
+
+
+def _rates(counts: np.ndarray) -> dict[str, np.ndarray]:
+    """counts[..., :] = true, detected, flagged, correct flags -> pooled rates."""
+    true, detected, flagged, correct = (counts[..., i] for i in range(4))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        recall = np.where(true > 0, detected / true, 0.0)
+        precision = np.where(flagged > 0, correct / flagged, 0.0)
+        f1 = np.where(precision + recall > 0, 2 * precision * recall / (precision + recall), 0.0)
+    return {"precision": precision, "recall": recall, "f1": f1}
+
+
+def _counts(per_server: list[EventScores]) -> np.ndarray:
+    return np.array([[s.true_events, s.detected_events, s.flagged_events, s.correct_flags]
+                     for s in per_server], dtype=float)
+
+
+def bootstrap_ci(per_server: list[EventScores], samples: int, seed: int,
+                 level: float = 0.95) -> dict[str, tuple[float, float]]:
+    """Percentile intervals for pooled precision, recall and F1, resampling servers.
+
+    Servers are the resampling unit because events on one server are not
+    independent of each other.
+    """
+    counts = _counts(per_server)
+    picks = np.random.default_rng(seed).integers(0, len(counts), size=(samples, len(counts)))
+    rates = _rates(counts[picks].sum(axis=1))
+    tail = (1 - level) / 2 * 100
+    return {k: (float(np.percentile(v, tail)), float(np.percentile(v, 100 - tail))) for k, v in rates.items()}
+
+
+def bootstrap_f1_difference(a: list[EventScores], b: list[EventScores], samples: int, seed: int,
+                            level: float = 0.95) -> tuple[float, float]:
+    """Paired interval for F1(a) - F1(b): both detectors see the same resampled servers."""
+    if len(a) != len(b):
+        raise ValueError("both detectors must be scored on the same servers")
+    ca, cb = _counts(a), _counts(b)
+    picks = np.random.default_rng(seed).integers(0, len(ca), size=(samples, len(ca)))
+    diff = _rates(ca[picks].sum(axis=1))["f1"] - _rates(cb[picks].sum(axis=1))["f1"]
+    tail = (1 - level) / 2 * 100
+    return float(np.percentile(diff, tail)), float(np.percentile(diff, 100 - tail))

@@ -3,7 +3,8 @@ import math
 import numpy as np
 import pytest
 
-from src.evaluate_detect import Segment, combine, score_events, segments
+from src.evaluate_detect import (EventScores, Segment, bootstrap_ci, bootstrap_f1_difference, combine,
+                                 score_events, segments)
 
 
 def mask(n, *spans):
@@ -76,3 +77,35 @@ def test_combine_pools_counts_across_servers():
 def test_length_mismatch_raises():
     with pytest.raises(ValueError):
         score_events(np.zeros(5), np.zeros(6))
+
+
+def _server(true, detected, flagged, correct):
+    return EventScores(true, detected, flagged, correct, ())
+
+
+def test_bootstrap_interval_contains_pooled_estimate_and_is_reproducible():
+    servers = [_server(10, 8, 20, 9), _server(5, 5, 50, 5), _server(8, 2, 4, 3), _server(12, 10, 30, 12)]
+    pooled = combine(servers)
+    ci = bootstrap_ci(servers, samples=500, seed=0)
+    for metric in ("precision", "recall", "f1"):
+        lo, hi = ci[metric]
+        assert lo <= getattr(pooled, metric) <= hi
+    assert ci == bootstrap_ci(servers, samples=500, seed=0)
+
+
+def test_bootstrap_interval_collapses_for_identical_servers():
+    servers = [_server(10, 5, 10, 5)] * 6
+    lo, hi = bootstrap_ci(servers, samples=200, seed=1)["recall"]
+    assert lo == hi == 0.5
+
+
+def test_paired_difference_is_zero_for_the_same_detector():
+    servers = [_server(10, 8, 20, 9), _server(5, 5, 50, 5), _server(8, 2, 4, 3)]
+    assert bootstrap_f1_difference(servers, servers, samples=200, seed=0) == (0.0, 0.0)
+
+
+def test_paired_difference_is_positive_when_a_dominates():
+    better = [_server(10, 9, 12, 11), _server(8, 8, 9, 8), _server(6, 5, 6, 5)]
+    worse = [_server(10, 9, 120, 11), _server(8, 8, 90, 8), _server(6, 5, 60, 5)]
+    lo, hi = bootstrap_f1_difference(better, worse, samples=500, seed=0)
+    assert lo > 0
