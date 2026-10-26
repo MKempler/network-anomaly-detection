@@ -23,7 +23,9 @@ import pandas as pd
 RCAEVAL_DIR = Path(__file__).resolve().parents[1] / "data" / "rcaeval"
 SUITES = ("RE1", "RE2", "RE3")
 SYSTEM_NAMES = {"OB": "Online Boutique", "SS": "Sock Shop", "TT": "Train Ticket"}
-METRICS_FILE = {"RE1": "data.csv", "RE2": "metrics.csv", "RE3": "metrics.csv"}
+# RE2/RE3 also ship a fuller metrics.csv, but RCAEval's own evaluation reads
+# simple_metrics.csv for them; every ranker here sees the same files it does.
+METRICS_FILE = {"RE1": "data.csv", "RE2": "simple_metrics.csv", "RE3": "simple_metrics.csv"}
 LOGS_FILE = "logs.csv"
 TRACES_FILE = "traces.csv"
 
@@ -106,6 +108,10 @@ def read_metrics(path: Path) -> pd.DataFrame:
     df = df.dropna(subset=["time"]).set_index("time").sort_index()
     df = df[~df.index.duplicated(keep="first")]
     df.index = df.index.astype("int64")
+    # Same column handling as RCAEval's main.py: keep p90 latency as "latency", drop p50.
+    df = df.loc[:, ~df.columns.str.endswith("_latency-50")]
+    df = df.rename(columns={c: c.removesuffix("-90") for c in df.columns if c.endswith("_latency-90")})
+    df = df.replace([float("inf"), float("-inf")], float("nan"))
     # Some Train Ticket columns are empty for the whole case; they carry no signal.
     return df.astype("float64").dropna(axis=1, how="all").ffill().bfill()
 

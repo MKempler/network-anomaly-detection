@@ -81,7 +81,9 @@ def re3_root(tmp_path):
     """An RE3-style case with logs, traces, and the files that must never be read."""
     case_dir = tmp_path / "RE3" / "RE3-TT" / "ts-route-service_f3_1" / "1"
     case_dir.mkdir(parents=True)
-    (case_dir / "metrics.csv").write_text("time,ts-route-service_cpu\n100,1.0\n101,2.0\n")
+    (case_dir / "simple_metrics.csv").write_text(
+        "time,ts-route-service_cpu,ts-route-service_latency-50,ts-route-service_latency-90\n100,1.0,5,9\n101,2.0,6,inf\n")
+    (case_dir / "metrics.csv").write_text(f"time,{SENTINEL}_cpu\n100,1\n101,1\n")  # not read for RE3
     (case_dir / "inject_time.txt").write_text("100\n")
     (case_dir / "logs.csv").write_text(
         "time,timestamp,container_name,message,pod_name,node_name\n"
@@ -142,3 +144,9 @@ def test_header_only_traces_do_not_count_as_a_source(re3_root):
     (case_dir / "traces.csv").write_text("time,traceID,spanID,serviceName\n")
     case = next(iter_cases("RE3", re3_root))
     assert case.sources == {"metrics", "logs"}
+
+
+def test_re2_re3_use_simple_metrics_with_rcaeval_column_handling(re3_root):
+    case = next(iter_cases("RE3", re3_root))
+    assert list(case.metrics.columns) == ["ts-route-service_cpu", "ts-route-service_latency"]
+    assert case.metrics["ts-route-service_latency"].tolist() == [9.0, 9.0]   # inf -> missing -> filled
