@@ -1,7 +1,7 @@
 """Run detectors over SMD and print event-level scores.
 
     python scripts/run_eval.py --detector zscore
-    python scripts/run_eval.py --detector zscore iforest       # comparison table
+    python scripts/run_eval.py --detector zscore iforest lstm  # comparison table
     python scripts/run_eval.py --detector iforest --machines machine-1-1
 
 Every detector is fit per server on train and scored on that server's test
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.config import DEFAULT, DETECTION_SECTIONS  # noqa: E402
-from src.detectors import IsolationForestDetector, ZScoreDetector  # noqa: E402
+from src.detectors import IsolationForestDetector, LSTMAutoencoderDetector, ZScoreDetector  # noqa: E402
 from src.evaluate_detect import bootstrap_ci, bootstrap_f1_difference, combine, score_events  # noqa: E402
 from src.load_smd import MinMaxScaler, list_machines, load_machine  # noqa: E402
 
@@ -35,6 +35,7 @@ RUNS = ROOT / "runs" / "detection.jsonl"
 DETECTORS = {
     "zscore": lambda cfg: ZScoreDetector(cfg.zscore),
     "iforest": lambda cfg: IsolationForestDetector(cfg.iforest),
+    "lstm": lambda cfg: LSTMAutoencoderDetector(cfg.lstm),
 }
 
 

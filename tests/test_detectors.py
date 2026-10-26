@@ -2,8 +2,9 @@ import numpy as np
 import pytest
 
 from src.config import IsolationForest as IsolationForestConfig
+from src.config import LSTMAutoencoder as LSTMConfig
 from src.config import ZScore
-from src.detectors import IsolationForestDetector, ZScoreDetector
+from src.detectors import IsolationForestDetector, LSTMAutoencoderDetector, ZScoreDetector
 
 CFG = ZScore(window=5, threshold=3.0)
 
@@ -78,3 +79,32 @@ def test_iforest_is_reproducible():
     a = IsolationForestDetector(cfg).fit(train).score(test)
     b = IsolationForestDetector(cfg).fit(train).score(test)
     assert np.array_equal(a, b)
+
+
+TINY_LSTM = LSTMConfig(window=10, hidden=(8, 4), epochs=15, batch_size=16, train_stride=1, seed=0)
+
+
+def periodic(rows, metrics=3, seed=0):
+    rng = np.random.default_rng(seed)
+    t = np.arange(rows)[:, None]
+    return np.sin(t / 5 + np.arange(metrics)) + rng.normal(0, 0.05, (rows, metrics))
+
+
+def test_lstm_scores_one_value_per_test_row_using_train_history():
+    det = LSTMAutoencoderDetector(TINY_LSTM).fit(periodic(200))
+    assert det.score(periodic(30, seed=1)).shape == (30,)
+
+
+def test_lstm_reconstructs_normal_better_than_anomalous():
+    det = LSTMAutoencoderDetector(TINY_LSTM).fit(periodic(300))
+    test = periodic(60, seed=2)
+    test[40:50] += 3.0
+    scores = det.score(test)
+    assert scores[45:50].mean() > 3 * scores[:30].mean()
+    assert scores[45:50].min() > det.threshold
+
+
+def test_lstm_is_reproducible_with_a_seed():
+    a = LSTMAutoencoderDetector(TINY_LSTM).fit(periodic(150)).score(periodic(20, seed=3))
+    b = LSTMAutoencoderDetector(TINY_LSTM).fit(periodic(150)).score(periodic(20, seed=3))
+    assert np.allclose(a, b)

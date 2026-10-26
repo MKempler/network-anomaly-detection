@@ -39,6 +39,18 @@ class IsolationForest:
 
 
 @dataclass(frozen=True)
+class LSTMAutoencoder:
+    window: int = 100               # consecutive points per input window, all metrics
+    hidden: tuple = (64, 32)        # encoder sizes; the decoder mirrors them
+    epochs: int = 10
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    train_stride: int = 10          # train on every 10th window; test scores every row
+    train_quantile: float = 0.99    # flag threshold: this quantile of train reconstruction errors
+    seed: int = 0
+
+
+@dataclass(frozen=True)
 class Investigation:
     """What the explanation layer looks at around a flag (RCAEval rows are 1 s apart)."""
     baseline_s: int = 600           # normal reference: this many seconds before the flag
@@ -59,6 +71,7 @@ class Config:
     stats: Stats = field(default_factory=Stats)
     zscore: ZScore = field(default_factory=ZScore)
     iforest: IsolationForest = field(default_factory=IsolationForest)
+    lstm: LSTMAutoencoder = field(default_factory=LSTMAutoencoder)
     investigation: Investigation = field(default_factory=Investigation)
 
     def sections(self, *names: str) -> dict:
