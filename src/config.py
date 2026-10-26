@@ -39,11 +39,25 @@ class IsolationForest:
 
 
 @dataclass(frozen=True)
+class Investigation:
+    """What the explanation layer looks at around a flag (RCAEval rows are 1 s apart)."""
+    baseline_s: int = 600           # normal reference: this many seconds before the flag
+    window_s: int = 300             # flagged window: this many seconds from the flag
+    rel_std_floor: float = 0.01     # baseline std used is max(std, floor * level, abs floor)
+    abs_std_floor: float = 1e-6
+    top_k: int = 15                 # metrics per top-deviations listing
+    series_points: int = 60         # max points returned for one metric's series
+    log_patterns: int = 10          # log templates per service listing
+    evidence_threshold: float = 3.0  # cited evidence must score at least this
+
+
+@dataclass(frozen=True)
 class Config:
     scoring: EventScoring = field(default_factory=EventScoring)
     stats: Stats = field(default_factory=Stats)
     zscore: ZScore = field(default_factory=ZScore)
     iforest: IsolationForest = field(default_factory=IsolationForest)
+    investigation: Investigation = field(default_factory=Investigation)
 
     def sections(self, *names: str) -> dict:
         return {name: asdict(getattr(self, name)) for name in names}
