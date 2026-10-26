@@ -50,6 +50,7 @@ class Investigation:
     log_patterns: int = 10          # log templates per service listing
     evidence_threshold: float = 3.0  # cited evidence must score at least this
     causes: int = 5                 # ranked causes each ranker returns
+    max_steps: int = 10             # agent turns before it must submit
 
 
 @dataclass(frozen=True)

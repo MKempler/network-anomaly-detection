@@ -37,12 +37,25 @@ class Ranking:
 
     @property
     def services(self) -> list[str]:
-        """Ranked services, each at its first appearance."""
+        """Ranked services, each at its first appearance.
+
+        A cause the verifier rejected keeps its rank as a placeholder, so it
+        scores as a miss instead of letting later guesses move up.
+        """
         seen: list[str] = []
-        for cause in self.causes:
-            if cause.get("service") and cause["service"] not in seen:
+        for i, cause in enumerate(self.causes):
+            if cause.get("verified") is False:
+                seen.append(f"<rejected #{i + 1}>")
+            elif cause.get("service") and cause["service"] not in seen:
                 seen.append(cause["service"])
         return seen
+
+
+def flat_usage(response: dict) -> dict:
+    """Token counts from a Responses API response, with reasoning tokens at the top level."""
+    u = response.get("usage") or {}
+    return {"input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
+            "reasoning_tokens": (u.get("output_tokens_details") or {}).get("reasoning_tokens", 0)}
 
 
 def no_ai_ranking(inv: Investigation) -> Ranking:
@@ -96,7 +109,7 @@ def spark_one_shot(inv: Investigation, cache: ModelCache, model: str) -> Ranking
     request = {"model": model, "instructions": ONE_SHOT_INSTRUCTIONS, "input": text, "store": False,
                "text": {"format": ranking_schema(inv.case.candidate_services, metrics, inv.cfg.causes)}}
     response = cache.create(**request)
-    usage = response.get("usage") or {}
+    usage = flat_usage(response)
     try:
         causes = json.loads(output_text(response))["causes"]
     except (json.JSONDecodeError, KeyError, TypeError) as error:
