@@ -3,7 +3,8 @@ import dataclasses
 import numpy as np
 import pytest
 
-from src.load_rcaeval import Case, case_index, iter_cases, load_labels, service_of
+from src.load_rcaeval import (Case, case_index, iter_cases, load_labels, load_logs, load_traces, parse_folder,
+                              service_of)
 
 HEADER = "time,adservice_cpu,ts-auth-service_container-cpu-usage-seconds-total,time,empty_metric"
 
@@ -34,7 +35,7 @@ def test_case_ids_are_opaque_and_stable(rcaeval_root):
 
 def test_case_carries_no_ground_truth(rcaeval_root):
     fields = {f.name for f in dataclasses.fields(Case)}
-    assert fields == {"case_id", "suite", "system", "metrics", "services"}
+    assert fields == {"case_id", "suite", "system", "metrics", "services", "sources"}
     for case in iter_cases("RE1", rcaeval_root):
         assert "inject" not in repr(case).lower()
 
@@ -70,3 +71,67 @@ def test_service_map(rcaeval_root):
 ])
 def test_service_of(column, service):
     assert service_of(column) == service
+
+
+SENTINEL = "ROOT_CAUSE_SENTINEL"
+
+
+@pytest.fixture
+def re3_root(tmp_path):
+    """An RE3-style case with logs, traces, and the files that must never be read."""
+    case_dir = tmp_path / "RE3" / "RE3-TT" / "ts-route-service_f3_1" / "1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "metrics.csv").write_text("time,ts-route-service_cpu\n100,1.0\n101,2.0\n")
+    (case_dir / "inject_time.txt").write_text("100\n")
+    (case_dir / "logs.csv").write_text(
+        "time,timestamp,container_name,message,pod_name,node_name\n"
+        "00:01,101000000000,ts-route-service,route lookup failed,pod-a,node-1\n"
+        "00:01,100000000000,ts-auth-service,login ok,pod-b,node-1\n")
+    (case_dir / "traces.csv").write_text(
+        "time,traceID,spanID,serviceName,methodName,operationName,startTimeMillis,startTime,duration,statusCode,parentSpanID\n"
+        "00:01,t1,s2,ts-route-service,GET,getRoute,100500,100500000,900,500,s1\n"
+        "00:01,t1,s1,ts-gateway,GET,route,100400,100400000,1200,0,\n")
+    (case_dir / "root_cause.txt").write_text(f"{SENTINEL} ts-route-service NullPointerException\n")
+    (case_dir / "metrics.png").write_bytes(SENTINEL.encode())
+    stray = tmp_path / "RE3" / "RE3-TT" / "ts-route-service_f3_1" / "multi-source-data"
+    stray.mkdir()
+    (stray / "inject_time.txt").write_text("1\n")
+    return tmp_path
+
+
+def test_stray_non_numbered_folders_are_not_cases(re3_root):
+    assert len(case_index("RE3", re3_root)) == 1
+
+
+@pytest.mark.parametrize("folder, expected", [
+    ("adservice_cpu", ("adservice", "cpu")),
+    ("ts-auth-service_socket", ("ts-auth-service", "socket")),
+    ("front-end_f2", ("front-end", "f2")),
+    ("ts-route-service_f3_1", ("ts-route-service", "f3")),
+])
+def test_parse_folder(folder, expected):
+    assert parse_folder(folder) == expected
+
+
+def test_parse_folder_rejects_unknown_faults():
+    with pytest.raises(ValueError):
+        parse_folder("adservice_meltdown")
+
+
+def test_logs_and_traces_load_by_opaque_id_and_sort_by_time(re3_root):
+    case = next(iter_cases("RE3", re3_root))
+    assert case.sources == {"metrics", "logs", "traces"}
+    logs = load_logs(case.case_id)
+    assert list(logs.columns) == ["time", "service", "message"]
+    assert logs["service"].tolist() == ["ts-auth-service", "ts-route-service"]
+    assert logs["time"].tolist() == [100.0, 101.0]
+    traces = load_traces(case.case_id)
+    assert traces["span_id"].tolist() == ["s1", "s2"]
+    assert traces.loc[1, "parent_span_id"] == "s1" and traces.loc[1, "status_code"] == 500
+
+
+def test_answer_files_are_never_read(re3_root):
+    case = next(iter_cases("RE3", re3_root))
+    seen = repr(case) + case.metrics.to_csv() + load_logs(case.case_id).to_csv() + load_traces(case.case_id).to_csv()
+    assert SENTINEL not in seen
+    assert load_labels("RE3", re3_root)[case.case_id].fault == "f3"

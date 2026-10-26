@@ -1,17 +1,21 @@
 """Load RCAEval failure cases.
 
 On disk a case lives at `<suite>/<suite>-<system>/<service>_<fault>/<n>/`,
-so the path itself names the root cause. Two rules follow from that:
+so the path itself names the root cause. Three rules follow from that:
 
 * `Case` carries an opaque id and observable telemetry only. Nothing a model,
   tool, or prompt receives can reveal the path.
 * Ground truth (root-cause service, fault, inject time) comes from
   `load_labels`, which only the evaluator and the window-anchoring code call.
+* Only an allowlist of telemetry files is ever opened. Some RE3 cases also ship
+  `root_cause.txt` (the root-cause log line) and `metrics.png`; neither is read.
 """
 
 import hashlib
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -19,16 +23,25 @@ import pandas as pd
 RCAEVAL_DIR = Path(__file__).resolve().parents[1] / "data" / "rcaeval"
 SUITES = ("RE1", "RE2", "RE3")
 SYSTEM_NAMES = {"OB": "Online Boutique", "SS": "Sock Shop", "TT": "Train Ticket"}
-METRICS_FILE = {"RE1": "data.csv"}
+METRICS_FILE = {"RE1": "data.csv", "RE2": "metrics.csv", "RE3": "metrics.csv"}
+LOGS_FILE = "logs.csv"
+TRACES_FILE = "traces.csv"
+
+# Folder names are <service>_<fault>, and one RE3 folder adds a variant suffix
+# (ts-route-service_f3_1). Faults: RE1/RE2 resource faults, RE3 code faults f1-f5.
+FOLDER = re.compile(r"^(?P<service>.+?)_(?P<fault>cpu|mem|disk|delay|loss|socket|f[1-5])(?:_\d+)?$")
+
+_case_dirs: dict[str, Path] = {}  # opaque id -> directory, filled by case_index
 
 
 @dataclass(frozen=True)
 class Case:
-    case_id: str            # opaque, e.g. "re1-4f1c2a9b0d"
+    case_id: str              # opaque, e.g. "re1-4f1c2a9b0d"
     suite: str
-    system: str             # "OB", "SS" or "TT"; known to any operator
-    metrics: pd.DataFrame   # index: unix seconds; columns: "<service>_<metric>"
+    system: str               # "OB", "SS" or "TT"; known to any operator
+    metrics: pd.DataFrame     # index: unix seconds; columns: "<service>_<metric>"
     services: dict[str, str]  # metric column -> service
+    sources: frozenset[str]   # observable sources on disk: metrics, logs, traces
 
     @property
     def candidate_services(self) -> list[str]:
@@ -47,13 +60,35 @@ def case_id_for(suite: str, rel_path: str) -> str:
     return f"{suite.lower()}-{hashlib.sha256(rel_path.encode()).hexdigest()[:10]}"
 
 
+def parse_folder(name: str) -> tuple[str, str]:
+    match = FOLDER.match(name)
+    if not match:
+        raise ValueError(f"unrecognised case folder {name!r}")
+    return match["service"], match["fault"]
+
+
 def case_index(suite: str, root: Path = RCAEVAL_DIR) -> dict[str, Path]:
-    """Opaque case id -> case directory, in a stable order."""
-    if suite not in METRICS_FILE:
-        raise NotImplementedError(f"{suite}: layout not wired up yet")
+    """Opaque case id -> case directory, in a stable order.
+
+    Cases sit at exactly <system>/<service>_<fault>/<instance number>/. The
+    RE2-OB archive also contains a stray copy of RCAEval's multi-source sample
+    at that depth, which the numeric-instance rule leaves out.
+    """
     suite_dir = root / suite
-    dirs = sorted(p.parent for p in suite_dir.rglob("inject_time.txt"))
-    return {case_id_for(suite, d.relative_to(suite_dir).as_posix()): d for d in dirs}
+    dirs = sorted(p.parent for p in suite_dir.glob("*/*/*/inject_time.txt") if p.parent.name.isdigit())
+    index = {case_id_for(suite, d.relative_to(suite_dir).as_posix()): d for d in dirs}
+    if any(_case_dirs.get(case_id, d) != d for case_id, d in index.items()):
+        # Same relative layout under a different root (tests): drop cached telemetry.
+        load_logs.cache_clear()
+        load_traces.cache_clear()
+    _case_dirs.update(index)
+    return index
+
+
+def _dir(case_id: str) -> Path:
+    if case_id not in _case_dirs:
+        case_index(case_id.split("-")[0].upper())
+    return _case_dirs[case_id]
 
 
 def service_of(column: str) -> str | None:
@@ -82,7 +117,9 @@ def load_case(suite: str, case_id: str, case_dir: Path) -> Case:
     unmapped = [c for c, s in services.items() if s is None]
     if unmapped:
         raise ValueError(f"{case_id}: {len(unmapped)} columns without a service, e.g. {unmapped[0]!r}")
-    return Case(case_id, suite, system, metrics, services)
+    sources = {"metrics"} | {name for name, file in (("logs", LOGS_FILE), ("traces", TRACES_FILE))
+                             if (case_dir / file).exists()}
+    return Case(case_id, suite, system, metrics, services, frozenset(sources))
 
 
 def iter_cases(suite: str, root: Path = RCAEVAL_DIR) -> Iterator[Case]:
@@ -91,11 +128,35 @@ def iter_cases(suite: str, root: Path = RCAEVAL_DIR) -> Iterator[Case]:
         yield load_case(suite, case_id, case_dir)
 
 
+@lru_cache(maxsize=2)
+def load_logs(case_id: str) -> pd.DataFrame:
+    """Log lines: time (unix seconds), service, message, and level where recorded."""
+    raw = pd.read_csv(_dir(case_id) / LOGS_FILE, usecols=lambda c: c in {"timestamp", "container_name",
+                                                                          "message", "level"})
+    logs = pd.DataFrame({"time": raw["timestamp"] / 1e9, "service": raw["container_name"],
+                         "message": raw["message"].astype(str)})
+    if "level" in raw:
+        logs["level"] = raw["level"]
+    return logs.sort_values("time", kind="stable").reset_index(drop=True)
+
+
+@lru_cache(maxsize=2)
+def load_traces(case_id: str) -> pd.DataFrame:
+    """Spans: start (unix seconds), ids, service, operation, duration (us), status code."""
+    raw = pd.read_csv(_dir(case_id) / TRACES_FILE, usecols=["traceID", "spanID", "parentSpanID", "serviceName",
+                                                             "operationName", "startTime", "duration", "statusCode"])
+    return pd.DataFrame({
+        "start": raw["startTime"] / 1e6, "trace_id": raw["traceID"], "span_id": raw["spanID"],
+        "parent_span_id": raw["parentSpanID"], "service": raw["serviceName"],
+        "operation": raw["operationName"], "duration_us": raw["duration"], "status_code": raw["statusCode"],
+    }).sort_values("start", kind="stable").reset_index(drop=True)
+
+
 def load_labels(suite: str, root: Path = RCAEVAL_DIR) -> dict[str, CaseLabels]:
     """Ground truth per case id. Evaluation and window anchoring only."""
     labels = {}
     for case_id, case_dir in case_index(suite, root).items():
-        service, _, fault = case_dir.parent.name.rpartition("_")
+        service, fault = parse_folder(case_dir.parent.name)
         inject_time = int((case_dir / "inject_time.txt").read_text().strip())
         labels[case_id] = CaseLabels(service, fault, inject_time)
     return labels
