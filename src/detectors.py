@@ -9,7 +9,9 @@ from test labels.
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import IsolationForest
 
+from src.config import IsolationForest as IsolationForestConfig
 from src.config import ZScore
 
 
@@ -48,3 +50,28 @@ class ZScoreDetector:
     def score(self, test: np.ndarray) -> np.ndarray:
         """Per-row score: the largest metric z-score."""
         return self.metric_scores(test).max(axis=1)
+
+
+class IsolationForestDetector:
+    """Isolation forest over all metrics at once.
+
+    Catches combinations of metrics that are unusual together even when no
+    single metric's z-score stands out. No contamination rate is set: train is
+    normal operation, so the flag threshold is simply a high quantile of the
+    scores train itself receives.
+    """
+
+    name = "iforest"
+
+    def __init__(self, cfg: IsolationForestConfig):
+        self.cfg = cfg
+
+    def fit(self, train: np.ndarray) -> "IsolationForestDetector":
+        self.model = IsolationForest(n_estimators=self.cfg.n_estimators,
+                                     random_state=self.cfg.random_state).fit(train)
+        self.threshold = float(np.quantile(self.score(train), self.cfg.train_quantile))
+        return self
+
+    def score(self, test: np.ndarray) -> np.ndarray:
+        """Per-row anomaly score; higher is more anomalous."""
+        return -self.model.score_samples(test)

@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 
+from src.config import IsolationForest as IsolationForestConfig
 from src.config import ZScore
-from src.detectors import ZScoreDetector
+from src.detectors import IsolationForestDetector, ZScoreDetector
 
 CFG = ZScore(window=5, threshold=3.0)
 
@@ -52,3 +53,28 @@ def test_row_score_is_the_largest_metric_score():
 def test_short_train_is_rejected():
     with pytest.raises(ValueError):
         ZScoreDetector(CFG).fit(np.zeros((3, 2)))
+
+
+def test_iforest_threshold_comes_from_train_quantile():
+    rng = np.random.default_rng(1)
+    train = rng.normal(size=(500, 4))
+    det = IsolationForestDetector(IsolationForestConfig(n_estimators=50, train_quantile=0.99)).fit(train)
+    flagged_train = (det.score(train) > det.threshold).mean()
+    assert flagged_train == pytest.approx(0.01, abs=0.005)
+
+
+def test_iforest_scores_outliers_higher():
+    rng = np.random.default_rng(2)
+    train = rng.normal(size=(500, 4))
+    det = IsolationForestDetector(IsolationForestConfig(n_estimators=50)).fit(train)
+    normal, outlier = det.score(np.zeros((1, 4)))[0], det.score(np.full((1, 4), 6.0))[0]
+    assert outlier > det.threshold > normal
+
+
+def test_iforest_is_reproducible():
+    rng = np.random.default_rng(3)
+    train, test = rng.normal(size=(300, 3)), rng.normal(size=(50, 3))
+    cfg = IsolationForestConfig(n_estimators=30)
+    a = IsolationForestDetector(cfg).fit(train).score(test)
+    b = IsolationForestDetector(cfg).fit(train).score(test)
+    assert np.array_equal(a, b)
