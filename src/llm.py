@@ -12,7 +12,10 @@ from openai import OpenAI
 
 BASE_URL = "https://api.meta.ai/v1"
 ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
-DEFAULT_MODEL = "muse-spark-1.3"
+# Contributor mode: the same Muse Spark 1.3 model at about a fifteenth of the
+# Standard price, in exchange for Meta being allowed to train on requests. Everything
+# sent is public benchmark data (SMD, RCAEval), so that trade is acceptable.
+DEFAULT_MODEL = "muse-spark-1.3-contributor"
 
 
 def api_key() -> str:
