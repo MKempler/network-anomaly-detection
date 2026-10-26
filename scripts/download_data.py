@@ -4,7 +4,8 @@ SMD (Server Machine Dataset) comes from a sparse checkout of the OmniAnomaly
 repository. RCAEval suites come from Zenodo record 14590730; every archive is
 checked against the MD5 that Zenodo publishes before it is extracted.
 
-Re-running is safe: anything already downloaded and verified is skipped.
+Re-running is safe: anything already downloaded and verified is skipped, and
+an interrupted archive resumes where it stopped.
 
     python scripts/download_data.py                 # SMD + RE1
     python scripts/download_data.py --rcaeval RE2   # one more suite
@@ -17,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -67,19 +69,37 @@ def zenodo_files():
     return {f["key"]: f for f in response.json()["files"]}
 
 
-def fetch(url, dest, expected_md5, size):
+def fetch(url, dest, expected_md5, size, attempts=10):
+    """Download with HTTP Range resume; Zenodo drops long transfers mid-file."""
+    next_report = 0.0
+    for attempt in range(1, attempts + 1):
+        have = dest.stat().st_size if dest.exists() else 0
+        if have >= size:
+            break
+        headers = {"Range": f"bytes={have}-"} if have else {}
+        try:
+            with requests.get(url, stream=True, timeout=60, headers=headers) as response:
+                response.raise_for_status()
+                if have and response.status_code != 206:  # server ignored the range
+                    have = 0
+                with open(dest, "ab" if have else "wb") as out:
+                    for chunk in response.iter_content(chunk_size=1 << 20):
+                        out.write(chunk)
+                        have += len(chunk)
+                        if have / size >= next_report:
+                            print(f"  {dest.name}: {have / size:5.0%} of {size / 1e6:,.0f} MB", flush=True)
+                            next_report = have / size + 0.10
+        except (requests.ConnectionError, requests.Timeout) as error:
+            print(f"  {dest.name}: interrupted at {have / 1e6:,.0f} MB ({type(error).__name__}), "
+                  f"retry {attempt}/{attempts}", flush=True)
+            time.sleep(min(60, 5 * attempt))
+    else:
+        raise RuntimeError(f"{dest.name}: incomplete after {attempts} attempts")
+
     md5 = hashlib.md5()
-    done, next_report = 0, 0.0
-    with requests.get(url, stream=True, timeout=60) as response:
-        response.raise_for_status()
-        with open(dest, "wb") as out:
-            for chunk in response.iter_content(chunk_size=1 << 20):
-                out.write(chunk)
-                md5.update(chunk)
-                done += len(chunk)
-                if done / size >= next_report:
-                    print(f"  {dest.name}: {done / size:5.0%} of {size / 1e6:,.0f} MB", flush=True)
-                    next_report += 0.10
+    with open(dest, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            md5.update(chunk)
     if md5.hexdigest() != expected_md5:
         dest.unlink()
         raise RuntimeError(f"{dest.name}: MD5 mismatch, download discarded")
