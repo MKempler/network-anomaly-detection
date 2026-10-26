@@ -159,10 +159,20 @@ def verify_smd():
     return ok
 
 
+def case_dirs(suite):
+    """Cases live at <suite>-<system>/<service>_<fault>/<instance number>/.
+
+    The instance must be a number: the RE2-OB archive also ships a stray copy of
+    RCAEval's multi-source sample (with its own inject_time.txt) inside
+    checkoutservice_cpu/, and it is not a benchmark case.
+    """
+    return sorted(p.parent for p in (RCAEVAL_DIR / suite).glob("*/*/*/inject_time.txt")
+                  if p.parent.name.isdigit())
+
+
 def verify_rcaeval(suite):
-    """A case is a directory holding inject_time.txt; each needs telemetry beside it."""
     print(f"{suite} checks")
-    cases = [p.parent for p in (RCAEVAL_DIR / suite).rglob("inject_time.txt")]
+    cases = case_dirs(suite)
     ok = check("cases", len(cases) == RCAEVAL_CASES[suite], f"{len(cases)} (expected {RCAEVAL_CASES[suite]})")
     missing = [c for c in cases if not any(c.glob("*.csv"))]
     ok &= check("cases with telemetry", not missing, f"{len(cases) - len(missing)} of {len(cases)}")
