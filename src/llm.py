@@ -29,5 +29,10 @@ def api_key() -> str:
     raise RuntimeError("MODEL_API_KEY is not set (environment or .env)")
 
 
+# A stuck connection otherwise waits the SDK default of 10 minutes per attempt;
+# one agent case hung for almost two hours that way. Typical calls take ~25 s.
+REQUEST_TIMEOUT_S = 120
+
+
 def client() -> OpenAI:
-    return OpenAI(base_url=BASE_URL, api_key=api_key(), max_retries=5)
+    return OpenAI(base_url=BASE_URL, api_key=api_key(), max_retries=5, timeout=REQUEST_TIMEOUT_S)
