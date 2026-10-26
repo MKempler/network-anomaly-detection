@@ -146,7 +146,7 @@ def load_logs(case_id: str) -> pd.DataFrame:
     raw = pd.read_csv(_dir(case_id) / LOGS_FILE, usecols=lambda c: c in {"timestamp", "container_name",
                                                                           "message", "level"})
     logs = pd.DataFrame({"time": raw["timestamp"] / 1e9, "service": raw["container_name"],
-                         "message": raw["message"].astype(str)})
+                         "message": raw["message"].fillna("").astype(str)})
     if "level" in raw:
         logs["level"] = raw["level"]
     return logs.sort_values("time", kind="stable").reset_index(drop=True)
