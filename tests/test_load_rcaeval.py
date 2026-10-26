@@ -135,3 +135,10 @@ def test_answer_files_are_never_read(re3_root):
     seen = repr(case) + case.metrics.to_csv() + load_logs(case.case_id).to_csv() + load_traces(case.case_id).to_csv()
     assert SENTINEL not in seen
     assert load_labels("RE3", re3_root)[case.case_id].fault == "f3"
+
+
+def test_header_only_traces_do_not_count_as_a_source(re3_root):
+    case_dir = next(iter(case_index("RE3", re3_root).values()))
+    (case_dir / "traces.csv").write_text("time,traceID,spanID,serviceName\n")
+    case = next(iter_cases("RE3", re3_root))
+    assert case.sources == {"metrics", "logs"}

@@ -118,8 +118,20 @@ def load_case(suite: str, case_id: str, case_dir: Path) -> Case:
     if unmapped:
         raise ValueError(f"{case_id}: {len(unmapped)} columns without a service, e.g. {unmapped[0]!r}")
     sources = {"metrics"} | {name for name, file in (("logs", LOGS_FILE), ("traces", TRACES_FILE))
-                             if (case_dir / file).exists()}
+                             if _has_rows(case_dir / file)}
     return Case(case_id, suite, system, metrics, services, frozenset(sources))
+
+
+def _has_rows(path: Path) -> bool:
+    """True if a CSV exists and has at least one row after the header.
+
+    The 13 RE3 Sock Shop cases that ship traces.csv ship it header-only.
+    """
+    if not path.exists():
+        return False
+    with open(path) as f:
+        f.readline()
+        return bool(f.readline().strip())
 
 
 def iter_cases(suite: str, root: Path = RCAEVAL_DIR) -> Iterator[Case]:
