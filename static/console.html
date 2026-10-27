@@ -112,8 +112,6 @@ nav button.theme { width: 48px; padding: 0; }
 .log:empty::before { content: attr(data-empty); display: block; padding: 10px 18px 16px; color: var(--ink-3); font-size: 12px; }
 .hint { display: none; margin: 0; font-size: 12px; color: var(--ink-3); }
 table.verdict:empty + .hint { display: block; }
-.intro { font-size: 13px; color: var(--ink-2); margin: 0 0 16px; }
-.intro a { color: var(--ink); }
 
 /* verdict */
 .verdict { width: 100%; border-collapse: collapse; }
@@ -135,6 +133,8 @@ table.verdict:empty + .hint { display: block; }
 .btn { background: none; border: 1px solid var(--rule-strong); padding: 9px 14px; cursor: pointer; font: 600 12px/1 var(--cond);
        letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 .btn:hover { border-color: var(--ink); }
+a.btn { display: inline-block; text-decoration: none; color: inherit; }
+a.btn.solid { color: var(--surface); }
 .btn.solid { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .btn.signal { background: var(--signal); color: #fff; border-color: var(--signal); }
 .btn:disabled { opacity: 0.35; cursor: default; }
@@ -142,6 +142,16 @@ table.verdict:empty + .hint { display: block; }
 .picker label { border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 7px 9px; cursor: pointer; font: 400 12px var(--mono); }
 .picker input { display: none; }
 .picker label:has(input:checked) { background: var(--ink); color: var(--surface); }
+.picker.tiles label b { display: block; font: 600 12px/1.2 var(--cond); letter-spacing: 0.06em; text-transform: uppercase; }
+.picker.tiles label span { display: block; font: 400 11px/1.3 var(--sans); opacity: 0.75; margin-top: 2px; }
+.picker label:has(input:disabled) { opacity: 0.4; cursor: not-allowed; }
+.choice-note { margin: 6px 0 0; font-size: 12px; color: var(--ink-2); min-height: 2.6em; }
+.how { padding: 16px 18px 20px; border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); }
+.how p { margin: 0 0 10px; }
+.how ol { margin: 0 0 12px; padding-left: 18px; }
+.how li { margin: 0 0 6px; }
+.how b { color: var(--ink); font-weight: 500; }
+.how a { color: var(--ink); }
 .faults label { display: block; border: 1px solid var(--rule); border-top: 0; padding: 8px 10px; cursor: pointer; }
 .faults label:first-child { border-top: 1px solid var(--rule); }
 .faults label b { font: 600 12px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; }
@@ -164,9 +174,11 @@ table.verdict:empty + .hint { display: block; }
 
 /* figures */
 .figs { display: grid; grid-template-columns: repeat(3, 1fr); }
-.figs div { padding: 14px 18px; border-right: 1px solid var(--rule); }
+.figs div { padding: 14px 18px; border-right: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: space-between; }
 .figs div:last-child { border-right: 0; }
 .figs b { display: block; font: 600 34px/1 var(--cond); margin-top: 8px; }
+.tally-note { margin: 0; padding: 8px 18px 10px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+              font-size: 12px; color: var(--ink-3); }
 
 /* library */
 .lib-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--rule); }
@@ -254,28 +266,41 @@ table.verdict:empty + .hint { display: block; }
   <div class="frame">
     <div class="col">
       <div class="block">
-        <p class="intro">Epicenter detects outages and sends a Meta Muse agent to find which service caused them. Break one below and watch it investigate, or open <a href="#replay">Replay</a> to watch any of 468 recorded investigations.</p>
         <h3 class="label">Break something</h3>
         <div class="label" style="margin:12px 0 6px">1 · Service</div>
         <div class="picker" id="target-picker"></div>
         <div class="label" style="margin:14px 0 6px">2 · Fault</div>
-        <div class="faults" id="fault-picker"></div>
+        <div class="picker tiles" id="fault-picker"></div>
+        <p class="choice-note" id="fault-note"></p>
         <div id="model-block" hidden>
           <div class="label" style="margin:14px 0 6px">3 · Who investigates</div>
-          <div class="faults" id="model-picker"></div>
+          <div class="picker tiles" id="model-picker"></div>
+          <p class="choice-note" id="model-note"></p>
         </div>
         <div style="margin-top:14px; display:flex; gap:8px; align-items:center">
           <button class="btn signal" id="break-btn">Inject fault</button>
           <span class="mono" id="break-msg" role="status"></span>
         </div>
-        <p class="note-sm">One shared system runs one outage at a time. The investigator is never told what you broke; it has to find out.</p>
+        <p class="note-sm">One outage runs at a time on the shared lab; yours joins the queue.</p>
       </div>
       <div class="block"><h3 class="label">Queue</h3><div id="queue" class="mono"></div></div>
     </div>
     <div class="col">
       <div class="figs" id="tally"></div>
+      <p class="tally-note" id="tally-note"></p>
       <div class="strips" id="live-strips"></div>
       <div id="live-offline" class="empty" hidden></div>
+      <div class="how">
+        <h3 class="label" style="margin:0 0 10px">How a live outage works</h3>
+        <p>Epicenter detects outages and sends a Meta Muse agent to find which service caused them. This lab is a real online shop of 11 services; the charts above are its live telemetry.</p>
+        <ol>
+          <li><b>You pick a fault.</b> The shop settles, then the fault goes in.</li>
+          <li><b>The alarm fires</b> once a deviation persists, by the same rule the benchmark uses.</li>
+          <li><b>The agent investigates</b> without being told what you broke. Every tool call streams into the flight log.</li>
+          <li><b>The verdict</b> ranks five suspects, a checker verifies each one's evidence, and the answer is scored against the fault you injected. Then the shop recovers.</li>
+        </ol>
+        <p style="margin:0">Prefer recorded outages? <a href="#replay">Replay</a> any of 468 benchmark investigations, or see the numbers under <a href="#evidence">Evidence</a>.</p>
+      </div>
     </div>
     <div class="col">
       <div class="block"><h3 class="label">Flight log</h3></div>
@@ -315,7 +340,11 @@ table.verdict:empty + .hint { display: block; }
       </div>
       <div class="strips" id="replay-strips"></div>
       <div id="replay-table" hidden></div>
-      <div class="empty" id="replay-empty">Pick a recorded outage. Each one is a held-out benchmark case, replayed exactly as the agent investigated it.</div>
+      <div class="empty" id="replay-empty">
+        <p style="margin:0 0 14px">Pick a recorded outage from the list. Each is a held-out benchmark case, replayed exactly as the agent investigated it.</p>
+        <p style="margin:0 0 14px">Not sure where to start? This one uses every tool, metrics, logs, traces and the call graph, and finds a cause the best published method misses.</p>
+        <a class="btn solid" href="#replay/RE2/re2-ed71d55852/play">Watch an example</a>
+      </div>
     </div>
     <div class="col">
       <div class="block"><h3 class="label">Flight log</h3></div>
@@ -384,6 +413,9 @@ const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n
 function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = String(text); return n; }
 async function api(path, opts) { const r = await fetch(path, opts); const body = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(body.detail || r.status), { status: r.status }); return body; }
 const SYSTEM = { OB: "Online Boutique", SS: "Sock Shop", TT: "Train Ticket" };
+const SHORT_SYSTEM = { OB: "Boutique", SS: "Sock Shop", TT: "Train Ticket" };
+const FAULT_TAG = { delay: "+400 ms", loss: "30% of packets", cpu: "1% of a core", pause: "frozen" };
+const MODEL_TAG = { "spark-open": ["Spark Open", "default · hosted"], "glimmer-tuned": ["Glimmer 30B", "fine-tuned"] };
 const RANKERS = { "baro": "BARO", "nsigma": "N-Sigma", "mmbaro": "Multi-source BARO", "no-ai": "No-AI control",
   "spark-one-shot": "Spark · one prompt", "spark-agent": "Spark agent · metrics", "spark-agent-all": "Spark agent · metrics, logs, traces",
   "open-one-shot": "Spark Open · one prompt", "open-agent": "Spark Open agent · metrics", "open-agent-all": "Spark Open agent · metrics, logs, traces",
@@ -428,7 +460,9 @@ function mountStrips(id, series, domain, marks) {
   const set = { root, series, domain, marks, rows: [], cursor: null };
   for (const s of series) {
     const row = el("div", "strip");
-    const name = el("div", "name"); name.title = s.metric; name.append(el("b", null, s.metric), el("span", null, s.service)); row.append(name);
+    // the service is printed underneath, so the label drops it: checkoutservice_latency -> latency
+    const short = s.metric.startsWith(s.service + "_") ? s.metric.slice(s.service.length + 1) : s.metric;
+    const name = el("div", "name"); name.title = s.metric; name.append(el("b", null, short), el("span", null, s.service)); row.append(name);
     const canvas = el("canvas"); row.append(canvas);
     const val = el("div", "val num", ""); row.append(val);
     root.append(row);
@@ -555,7 +589,7 @@ async function loadSuite(suite) {
   replay.index = await api(`/api/replays?suite=${suite}`); replay.system = null;
   const f = $("#system-filter"); f.replaceChildren();
   [null, ...new Set(replay.index.cases.map((c) => c.system))].forEach((s) => {
-    const b = el("button", null, s || "ALL"); b.setAttribute("aria-pressed", String(s === null));
+    const b = el("button", null, s ? SHORT_SYSTEM[s] || s : "All"); b.setAttribute("aria-pressed", String(s === null));
     b.title = s ? SYSTEM[s] || s : "All systems"; b.setAttribute("aria-label", b.title);
     b.onclick = () => { replay.system = s; f.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); renderCaseList(); };
     f.append(b);
@@ -685,15 +719,22 @@ async function initLive() {
   try { menu = await api("/api/live/menu"); } catch (e) { menu = null; }
   const picker = $("#target-picker"), faults = $("#fault-picker");
   (menu?.targets || []).forEach((t, i) => { const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "target"; r.value = t; r.checked = i === 0; l.append(r, document.createTextNode(t.replace("service", ""))); picker.append(l); });
-  Object.entries(menu?.faults || {}).forEach(([k, v], i) => { const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "fault"; r.value = k; r.checked = i === 0; l.append(r, el("b", null, k), el("span", null, v)); faults.append(l); });
+  Object.entries(menu?.faults || {}).forEach(([k, v], i) => {
+    const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "fault"; r.value = k; r.checked = i === 0;
+    r.onchange = () => { $("#fault-note").textContent = v; };
+    if (r.checked) $("#fault-note").textContent = v;
+    l.title = v; l.append(r, el("b", null, k), el("span", null, FAULT_TAG[k] || "")); faults.append(l);
+  });
   live.models = Object.fromEntries((menu?.models || []).map((m) => [m.key, m.name]));
   if ((menu?.models || []).length > 1) {
     $("#model-block").hidden = false;
     menu.models.forEach((m, i) => {
       const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "model"; r.value = m.key; r.checked = i === 0;
-      const left = m.left_today == null ? "" : ` · ${m.left_today} left today`;
+      const tag = MODEL_TAG[m.key] || ["", ""], left = m.left_today == null ? "" : ` · ${m.left_today} left today`;
       r.disabled = m.left_today === 0;
-      l.append(r, el("b", null, m.name), el("span", null, m.detail + left)); $("#model-picker").append(l);
+      r.onchange = () => { $("#model-note").textContent = m.detail; };
+      if (r.checked) $("#model-note").textContent = m.detail;
+      l.title = m.detail; l.append(r, el("b", null, tag[0] || m.name), el("span", null, tag[1] + left)); $("#model-picker").append(l);
     });
   }
   let state;
@@ -717,9 +758,15 @@ async function initLive() {
 function renderTally(t) {
   const f = $("#tally"); f.replaceChildren();
   const pct = t.investigated ? Math.round(100 * t.top1 / t.investigated) + "%" : "—";
-  [["Outages broken live", t.incidents], ["Diagnosed", t.investigated], ["Root cause ranked first", pct]].forEach(([k, v]) => {
+  [["Faults injected live", t.incidents], ["Investigated", t.investigated], ["Broken service ranked first", pct]].forEach(([k, v]) => {
     const d = el("div"); d.append(el("span", "label", k), el("b", null, v)); f.append(d);
   });
+  const quiet = t.incidents - t.investigated;
+  $("#tally-note").textContent = t.incidents
+    ? `Finished live outages on this lab, including its first calibration runs, each scored against the fault that was ` +
+      `injected.${quiet ? ` ${quiet} raised no alarm, so ${quiet === 1 ? "it wasn't" : "they weren't"} investigated.` : ""} ` +
+      `Benchmark accuracy on 468 held-out outages is under Evidence.`
+    : "Live outages appear here as they finish. Benchmark accuracy on 468 held-out outages is under Evidence.";
 }
 function renderQueue(q) {
   const box = $("#queue"); box.replaceChildren();
