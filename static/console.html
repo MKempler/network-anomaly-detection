@@ -217,6 +217,14 @@ a.btn.solid { color: var(--surface); }
 .etable .bar div { height: 8px; background: var(--ink-3); }
 .etable tr.top .bar div { background: var(--ink); }
 .etable tr.top td:first-child { font-weight: 500; }
+/* the replay's numbers view: service and metric in their own columns, values right-aligned */
+.dtable { table-layout: auto; margin: 0; }
+#replay-table { overflow-x: auto; }   /* a phone scrolls the table, never the page */
+.dtable th, .dtable td { padding-left: 14px; padding-right: 14px; white-space: nowrap; overflow-wrap: normal; }
+.dtable th:first-child, .dtable td:first-child { padding-left: 18px; }
+table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /* beats the phone rule for result tables */
+.dtable .num { text-align: right; }
+.dtable-note { margin: 0; padding: 12px 18px 4px; font-size: 12px; color: var(--ink-3); }
 @media (max-width: 700px) {
   /* the masthead's tabs share the row, so brand, three views and the theme toggle fit a 360 px phone */
   .brand { padding: 0 12px; gap: 8px; }
@@ -233,6 +241,8 @@ a.btn.solid { color: var(--surface); }
   .etable td:first-child { white-space: normal; overflow-wrap: anywhere; padding-right: 12px; }
   .etable caption .label { white-space: normal; }
   .etable th { overflow-wrap: normal; }
+  .dtable th, .dtable td { padding-left: 7px; padding-right: 7px; }
+  .dtable th:first-child, .dtable td:first-child { padding-left: 16px; }
 }
 
 /* three columns: the log-and-verdict column scrolls on its own, so the list and the chart stay put */
@@ -646,14 +656,17 @@ $("#table-btn").onclick = () => {
   const b = replay.bundle, box = $("#replay-table"), open = box.hidden;
   box.hidden = !open; $("#replay-strips").hidden = open; $("#table-btn").textContent = open ? "Chart" : "Table";
   if (!open) return redrawAll();
-  const t = el("table", "etable"); t.style.margin = "0";
-  const head = el("tr"); ["metric", "service", "baseline mean", "window mean", "window max"].forEach((h) => head.append(el("th", null, h))); t.append(head);
+  const t = el("table", "etable dtable");
+  const head = el("tr"); ["Service", "Metric", "Before", "After", "Peak"].forEach((h, i) => head.append(el("th", i > 1 ? "num" : null, h))); t.append(head);
   for (const s of b.series) {
     const base = s.points.filter((p) => p[0] < 0).map((p) => p[1]), win = s.points.filter((p) => p[0] >= 0).map((p) => p[1]);
     const mean = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
-    const tr = el("tr"); [s.metric, s.service, fmtVal(mean(base)), fmtVal(mean(win)), fmtVal(Math.max(...win))].forEach((v, i) => tr.append(el("td", i > 1 ? "v" : "", v))); t.append(tr);
+    const short = s.metric.startsWith(s.service + "_") ? s.metric.slice(s.service.length + 1) : s.metric;
+    const tr = el("tr"); [s.service, short, fmtVal(mean(base)), fmtVal(mean(win)), fmtVal(Math.max(...win))].forEach((v, i) => {
+      const td = el("td", i > 1 ? "v num" : i === 1 ? "v" : "", v); if (i === 1) td.title = s.metric; tr.append(td); });
+    t.append(tr);
   }
-  box.replaceChildren(t);
+  box.replaceChildren(el("p", "dtable-note", "Before: the metric's mean before the alarm. After: its mean after the alarm. Peak: its highest value after it."), t);
 };
 $("#reveal-btn").onclick = async () => {
   const b = replay.bundle, full = await api(`/api/replays/${b.suite}/${b.case_id}?reveal=true`);
