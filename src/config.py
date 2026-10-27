@@ -66,6 +66,21 @@ class Investigation:
 
 
 @dataclass(frozen=True)
+class Anchor:
+    """End-to-end mode: our detector, not the benchmark, decides when to investigate.
+
+    Chosen on train cases only (RE1 + RE2, 258 cases) by one objective set in
+    advance: the most anchors within 0-120 s after the fault starts, ties to
+    fewer early alarms. An isolation forest anchored only 83 of 258 there; this
+    per-metric z-score alarm anchors 188.
+    """
+    history_fraction: float = 0.25  # "normal" is learned from the start of each recording
+    threshold_sigma: float = 30.0   # a metric this many (floored) stds from its history mean is abnormal
+    persist_s: int = 120            # ...and must stay abnormal this long before an investigation starts
+    rel_std_floor: float = 0.01     # history std used is max(std, floor * |mean|, 1e-6)
+
+
+@dataclass(frozen=True)
 class Config:
     scoring: EventScoring = field(default_factory=EventScoring)
     stats: Stats = field(default_factory=Stats)
@@ -73,6 +88,7 @@ class Config:
     iforest: IsolationForest = field(default_factory=IsolationForest)
     lstm: LSTMAutoencoder = field(default_factory=LSTMAutoencoder)
     investigation: Investigation = field(default_factory=Investigation)
+    anchor: Anchor = field(default_factory=Anchor)
 
     def sections(self, *names: str) -> dict:
         return {name: asdict(getattr(self, name)) for name in names}
