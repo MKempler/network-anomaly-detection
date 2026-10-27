@@ -1,0 +1,654 @@
+{
+ "suite": "RE3",
+ "ranker": "spark-agent-all",
+ "cases": [
+  {
+   "case_id": "re3-05a05c427f",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re3-06853e6b0a",
+   "system": "OB",
+   "fault": "f3",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re3-08fec4ba6a",
+   "system": "OB",
+   "fault": "f2",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re3-0be2ee4374",
+   "system": "OB",
+   "fault": "f4",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-15116e1cf8",
+   "system": "OB",
+   "fault": "f5",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re3-1b7a1c260c",
+   "system": "OB",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 34
+  },
+  {
+   "case_id": "re3-1bcdcd0649",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-1c3d01490c",
+   "system": "OB",
+   "fault": "f3",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-1e191b5505",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 36
+  },
+  {
+   "case_id": "re3-1f1ad7aa17",
+   "system": "OB",
+   "fault": "f4",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re3-20987d8540",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re3-218b0a6dff",
+   "system": "SS",
+   "fault": "f2",
+   "turns": 10,
+   "top1": true,
+   "tool_calls": 42
+  },
+  {
+   "case_id": "re3-2405b09bb1",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re3-26fe73a4e6",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re3-29b971e814",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re3-2ad9b2663a",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 36
+  },
+  {
+   "case_id": "re3-2eea59737e",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re3-2fdae29475",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re3-33cb39057a",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re3-355488bc81",
+   "system": "OB",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re3-370a538159",
+   "system": "OB",
+   "fault": "f3",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re3-37f75801c5",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 32
+  },
+  {
+   "case_id": "re3-3b6f683c6e",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re3-3e54b95b98",
+   "system": "OB",
+   "fault": "f3",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-41e966ad3f",
+   "system": "OB",
+   "fault": "f2",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-44c384fb4b",
+   "system": "OB",
+   "fault": "f5",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-44d78aeb5c",
+   "system": "TT",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 41
+  },
+  {
+   "case_id": "re3-47c5947fa9",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 38
+  },
+  {
+   "case_id": "re3-4b90f6ec9c",
+   "system": "OB",
+   "fault": "f3",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re3-4cd99547c2",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-4f081c4804",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re3-5051c10d23",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 12
+  },
+  {
+   "case_id": "re3-5399b08484",
+   "system": "OB",
+   "fault": "f5",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 12
+  },
+  {
+   "case_id": "re3-59e45ec472",
+   "system": "TT",
+   "fault": "f4",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 39
+  },
+  {
+   "case_id": "re3-5a0bcf9620",
+   "system": "OB",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re3-5ab55c6ce7",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re3-6127f84a8c",
+   "system": "OB",
+   "fault": "f4",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re3-61fb92f0cf",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re3-696b39d979",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re3-6c16e4ed26",
+   "system": "OB",
+   "fault": "f2",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re3-6ee22068fc",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-70a361d05b",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 10,
+   "top1": true,
+   "tool_calls": 45
+  },
+  {
+   "case_id": "re3-70b7c88d85",
+   "system": "OB",
+   "fault": "f5",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 13
+  },
+  {
+   "case_id": "re3-73d9f040f1",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re3-7c8141f0e8",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re3-801392916f",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-876e5bf908",
+   "system": "OB",
+   "fault": "f3",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-92bc81aae5",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 10,
+   "top1": true,
+   "tool_calls": 44
+  },
+  {
+   "case_id": "re3-933623db19",
+   "system": "OB",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re3-95f15700db",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re3-98704d021e",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re3-9d942f2818",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re3-a08f0c88f4",
+   "system": "SS",
+   "fault": "f3",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-a2a3ea29fe",
+   "system": "TT",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re3-a3a5ff3ece",
+   "system": "OB",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-a3ebb014dd",
+   "system": "SS",
+   "fault": "f2",
+   "turns": 10,
+   "top1": true,
+   "tool_calls": 47
+  },
+  {
+   "case_id": "re3-a544ee6bab",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re3-aa917191c7",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-b00567570f",
+   "system": "OB",
+   "fault": "f4",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re3-b1efa5c870",
+   "system": "SS",
+   "fault": "f2",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re3-b50b27194f",
+   "system": "TT",
+   "fault": "f4",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re3-b531bf3bb5",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re3-b8ed3abfad",
+   "system": "TT",
+   "fault": "f1",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re3-bc5a61b068",
+   "system": "OB",
+   "fault": "f4",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re3-bcd76d7d3a",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-bdfb1d89a2",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re3-c5810caf94",
+   "system": "TT",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 37
+  },
+  {
+   "case_id": "re3-c97813cc84",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re3-cb2e7fa963",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re3-ceec51b362",
+   "system": "OB",
+   "fault": "f5",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re3-cfcbca3330",
+   "system": "OB",
+   "fault": "f1",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re3-d19d4d9d6a",
+   "system": "SS",
+   "fault": "f1",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re3-d6d94bc8a5",
+   "system": "OB",
+   "fault": "f5",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re3-d8c41eb35a",
+   "system": "OB",
+   "fault": "f1",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re3-da42352a2d",
+   "system": "TT",
+   "fault": "f3",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 32
+  },
+  {
+   "case_id": "re3-dbe759df55",
+   "system": "TT",
+   "fault": "f4",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 47
+  },
+  {
+   "case_id": "re3-e129bbb6ea",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 33
+  },
+  {
+   "case_id": "re3-e55064c8d5",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 31
+  },
+  {
+   "case_id": "re3-e9035a7ccd",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re3-f4b46761ef",
+   "system": "SS",
+   "fault": "f4",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re3-fe75a285a1",
+   "system": "TT",
+   "fault": "f2",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 30
+  }
+ ]
+}

@@ -1,0 +1,1806 @@
+{
+ "suite": "RE1",
+ "ranker": "spark-agent",
+ "cases": [
+  {
+   "case_id": "re1-0320b3537a",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-057940991a",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-058fbb93fd",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-05ef249afc",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-07cbb78f70",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-0932ada60a",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-09661774c2",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-09ea49693b",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-0a2f52cf58",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-0b2f1e4da9",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-0b69f90595",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-0bc876dc3d",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re1-0c1b4f69a8",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-0cbaf805db",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-0dda9ba749",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-0ebe6573ea",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-0fea5c40e8",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-0fff11fba0",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-10fd53ae59",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-113a4d1ba6",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-13424e8595",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re1-1694874ab9",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re1-16a82880ca",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-16dd9b952e",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-19b180a5c3",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-1badfaa28e",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 37
+  },
+  {
+   "case_id": "re1-1d7ed2c607",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re1-1e6511126f",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-1f30c8c50a",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 10,
+   "top1": false,
+   "tool_calls": 47
+  },
+  {
+   "case_id": "re1-1f4fe7c0e5",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-1f7c616e04",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-232212b5d1",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-23dc5f0d10",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 37
+  },
+  {
+   "case_id": "re1-258b1cd89c",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-25c5119c4b",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-260a5b548f",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-26ac1537ce",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-26b9f7016e",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-26f403fbf5",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-27e79314b8",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-29820ad63c",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-2a809be354",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-2aad6bdbd2",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re1-2aaf141c13",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-2b3758bd9a",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 43
+  },
+  {
+   "case_id": "re1-2b75978402",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 10,
+   "top1": true,
+   "tool_calls": 32
+  },
+  {
+   "case_id": "re1-2c0527db61",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-2ced909286",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-2dd28aa046",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-2f1c44cd52",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-2f2e2e2832",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-3009d333bf",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-3105616d32",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 12
+  },
+  {
+   "case_id": "re1-322a1a5340",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-35eb280002",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-363fe327eb",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-364b278ce5",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-36aa39476b",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-38064d0243",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-385a1c4a4c",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-38980e0d95",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-3898576a7a",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-3bf49c7428",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-3c167a1665",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 13
+  },
+  {
+   "case_id": "re1-3e5dcdc43e",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-3e97722551",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-3f7820f728",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-419b43de11",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 11,
+   "top1": true,
+   "tool_calls": 42
+  },
+  {
+   "case_id": "re1-43cd044ec3",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-45ce27a1c7",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-475d39e293",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re1-485d6ccec4",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re1-48bf41484b",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-4afe35fa77",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-4d064d46ec",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-4d2dd2eb4e",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re1-4e7fb69013",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-4f32933f8b",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-515e830192",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-518ff93e11",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-52921b4f79",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re1-52f321601e",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-534ff7cbf6",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-55b8896718",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-56c30cbe70",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-5bfd23a65a",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re1-5c15a2839b",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-5cff03aa7b",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-5f5339b73a",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-5f7e5a4fe7",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 33
+  },
+  {
+   "case_id": "re1-61e551117f",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 34
+  },
+  {
+   "case_id": "re1-65cf25b57d",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-67817a13af",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-678ce798cb",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-68631ee970",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-69beba21ef",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-6a9cd80396",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-6b996b1790",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-6c31725dbf",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-6c857269cb",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-6f8799fe28",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-704cd12027",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-70696494c4",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-70dfc45def",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-71991bbfc6",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-7226ee4395",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-7356ce50ec",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-765543036e",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-78221bd72b",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 6,
+   "top1": false,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-79661507bd",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-7a087d406c",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-7b97c76f1d",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-7c0920c79a",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-7ca2fa87c9",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-7f7355afb6",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-80273a9c32",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-802a570366",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-821c0f650a",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-832332d281",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-84c11d4068",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-84fec77b3e",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-876555951d",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re1-8852dda16e",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-891ed311d1",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-8ae23c44cf",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-8be2f92497",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-8c128b41c4",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-8ea6125031",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-90e5e2be23",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-910bd4a1b9",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 13
+  },
+  {
+   "case_id": "re1-92ac43e16d",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-92d2685976",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-949cc5b50b",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-957c499e7d",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-965552aa15",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-976fb4eba6",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-985a72f361",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-9971c937d4",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-99a759f7c1",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-9ca04f4188",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-9cd894a071",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-9d1b749226",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-9f14e44a32",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-9f49484e00",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 35
+  },
+  {
+   "case_id": "re1-a136fba7df",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 17
+  },
+  {
+   "case_id": "re1-a2b7fbf968",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re1-a4a033a195",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-a6738a08d1",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-a7023a46af",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-a70e8e8c68",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-a73858a7a4",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-a7be754ffe",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-aa90a45200",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 34
+  },
+  {
+   "case_id": "re1-ae1f8bec34",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-aed105306b",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-b0183cb0d0",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-b1946e981a",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 32
+  },
+  {
+   "case_id": "re1-b209f68d0f",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re1-b25dcaa049",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-b3729bd5b3",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-b385cfcba8",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-b6d14a91ba",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re1-b6da159506",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 10,
+   "top1": false,
+   "tool_calls": 24
+  },
+  {
+   "case_id": "re1-b9bade48ad",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-ba5c377ca8",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-bc21178097",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-bcbffa2686",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-bd1504b030",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-bd1504d4eb",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re1-bd406a6638",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-c05c5618b6",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 34
+  },
+  {
+   "case_id": "re1-c0bc7e1fd2",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 36
+  },
+  {
+   "case_id": "re1-c3b894124a",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re1-c48e278238",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-c66039dc26",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-ca79a21175",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re1-cb9d0e76b4",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-cbe1875361",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-cd44f196ff",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-ceaa3b05da",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-ceff0a3f2a",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 28
+  },
+  {
+   "case_id": "re1-cfc43e7d74",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re1-d20891a572",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-d4be333510",
+   "system": "TT",
+   "fault": "loss",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-d59e6c6c2e",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-d5a7a659c3",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-d820fa0145",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-d87e5eae8d",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 19
+  },
+  {
+   "case_id": "re1-d8ad398975",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-d8c47dbb94",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 31
+  },
+  {
+   "case_id": "re1-d972c58227",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 7,
+   "top1": false,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re1-d9c19b9439",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 23
+  },
+  {
+   "case_id": "re1-d9f853927b",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 8,
+   "top1": true,
+   "tool_calls": 32
+  },
+  {
+   "case_id": "re1-da0636061a",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-dab8851a6e",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-dbbfb3bfbd",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-ddc90fb769",
+   "system": "SS",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-de1c405139",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-de7a86534b",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-def8f2edff",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 9,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re1-e139311a9b",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-e3b18ec562",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 26
+  },
+  {
+   "case_id": "re1-e6e60f5a08",
+   "system": "SS",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-eae44abf1f",
+   "system": "TT",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-eb6f6fdd6e",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 16
+  },
+  {
+   "case_id": "re1-ebe181a9e8",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-ec4f327ea5",
+   "system": "TT",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 30
+  },
+  {
+   "case_id": "re1-ec9ddfa9e1",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-ecc5d8add0",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 22
+  },
+  {
+   "case_id": "re1-ed052f8294",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 15
+  },
+  {
+   "case_id": "re1-ed6af8a94b",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 14
+  },
+  {
+   "case_id": "re1-ee056352ca",
+   "system": "OB",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-ee2cceac51",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-f02866dbd8",
+   "system": "OB",
+   "fault": "mem",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-f200210521",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 7,
+   "top1": true,
+   "tool_calls": 29
+  },
+  {
+   "case_id": "re1-f34432e500",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 21
+  },
+  {
+   "case_id": "re1-f3ab2f9f45",
+   "system": "OB",
+   "fault": "delay",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-f50b851083",
+   "system": "SS",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-f5f49e6f4a",
+   "system": "OB",
+   "fault": "cpu",
+   "turns": 4,
+   "top1": true,
+   "tool_calls": 13
+  },
+  {
+   "case_id": "re1-f6210193d2",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  },
+  {
+   "case_id": "re1-f6277f88ab",
+   "system": "OB",
+   "fault": "disk",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 18
+  },
+  {
+   "case_id": "re1-f6b415cc51",
+   "system": "SS",
+   "fault": "delay",
+   "turns": 5,
+   "top1": true,
+   "tool_calls": 20
+  },
+  {
+   "case_id": "re1-f765d7ab7e",
+   "system": "TT",
+   "fault": "cpu",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 27
+  },
+  {
+   "case_id": "re1-f8f42434ac",
+   "system": "SS",
+   "fault": "loss",
+   "turns": 9,
+   "top1": false,
+   "tool_calls": 38
+  },
+  {
+   "case_id": "re1-fb212991a9",
+   "system": "TT",
+   "fault": "disk",
+   "turns": 6,
+   "top1": true,
+   "tool_calls": 25
+  }
+ ]
+}
