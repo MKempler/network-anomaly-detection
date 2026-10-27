@@ -146,10 +146,10 @@ a.btn.solid { color: var(--surface); }
 .picker.tiles label span { display: block; font: 400 11px/1.3 var(--sans); opacity: 0.75; margin-top: 2px; }
 .picker label:has(input:disabled) { opacity: 0.4; cursor: not-allowed; }
 .choice-note { margin: 6px 0 0; font-size: 12px; color: var(--ink-2); min-height: 2.6em; }
-.how { padding: 16px 18px 20px; border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); }
-.how p { margin: 0 0 10px; }
-.how ol { margin: 0 0 12px; padding-left: 18px; }
-.how li { margin: 0 0 6px; }
+.how { padding: 14px 18px 16px; border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); }
+.how p { margin: 0 0 8px; }
+.how ol { margin: 0 0 8px; padding-left: 18px; }
+.how li { margin: 0 0 3px; }
 .how b { color: var(--ink); font-weight: 500; }
 .how a { color: var(--ink); }
 .faults label { display: block; border: 1px solid var(--rule); border-top: 0; padding: 8px 10px; cursor: pointer; }
@@ -177,6 +177,7 @@ a.btn.solid { color: var(--surface); }
 .figs div { padding: 14px 18px; border-right: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: space-between; }
 .figs div:last-child { border-right: 0; }
 .figs b { display: block; font: 600 34px/1 var(--cond); margin-top: 8px; }
+.figs b small { font: 400 12px var(--mono); color: var(--ink-3); margin-left: 8px; letter-spacing: 0; }
 .tally-note { margin: 0; padding: 8px 18px 10px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
               font-size: 12px; color: var(--ink-3); }
 
@@ -292,14 +293,14 @@ a.btn.solid { color: var(--surface); }
       <div id="live-offline" class="empty" hidden></div>
       <div class="how">
         <h3 class="label" style="margin:0 0 10px">How a live outage works</h3>
-        <p>Epicenter detects outages and sends a Meta Muse agent to find which service caused them. This lab is a real online shop of 11 services; the charts above are its live telemetry.</p>
+        <p>A real online shop of 11 services; the charts above are its live telemetry.</p>
         <ol>
-          <li><b>You pick a fault.</b> The shop settles, then the fault goes in.</li>
-          <li><b>The alarm fires</b> once a deviation persists, by the same rule the benchmark uses.</li>
-          <li><b>The agent investigates</b> without being told what you broke. Every tool call streams into the flight log.</li>
-          <li><b>The verdict</b> ranks five suspects, a checker verifies each one's evidence, and the answer is scored against the fault you injected. Then the shop recovers.</li>
+          <li><b>You pick a fault</b> and it goes in.</li>
+          <li><b>The alarm fires</b> when the shop's telemetry stays abnormal.</li>
+          <li><b>A Meta Muse agent investigates</b>, never told what you broke. Its tool calls stream into the flight log.</li>
+          <li><b>The verdict</b> ranks five suspects, each with checked evidence, and is scored against your fault.</li>
         </ol>
-        <p style="margin:0">Prefer recorded outages? <a href="#replay">Replay</a> any of 468 benchmark investigations, or see the numbers under <a href="#evidence">Evidence</a>.</p>
+        <p style="margin:0">Or <a href="#replay">replay</a> any of 468 recorded investigations, and see the numbers under <a href="#evidence">Evidence</a>.</p>
       </div>
     </div>
     <div class="col">
@@ -758,15 +759,14 @@ async function initLive() {
 function renderTally(t) {
   const f = $("#tally"); f.replaceChildren();
   const pct = t.investigated ? Math.round(100 * t.top1 / t.investigated) + "%" : "—";
-  [["Faults injected live", t.incidents], ["Investigated", t.investigated], ["Broken service ranked first", pct]].forEach(([k, v]) => {
-    const d = el("div"); d.append(el("span", "label", k), el("b", null, v)); f.append(d);
+  const sub = t.investigated ? `${t.top1} of ${t.investigated}` : "";
+  [["Outages so far", t.incidents, ""], ["Alarm raised", t.detected, ""], ["Named the cause first", pct, sub]].forEach(([k, v, small]) => {
+    const d = el("div"); const num = el("b", null, v); if (small) num.append(el("small", null, small));
+    d.append(el("span", "label", k), num); f.append(d);
   });
-  const quiet = t.incidents - t.investigated;
   $("#tally-note").textContent = t.incidents
-    ? `Finished live outages on this lab, including its first calibration runs, each scored against the fault that was ` +
-      `injected.${quiet ? ` ${quiet} raised no alarm, so ${quiet === 1 ? "it wasn't" : "they weren't"} investigated.` : ""} ` +
-      `Benchmark accuracy on 468 held-out outages is under Evidence.`
-    : "Live outages appear here as they finish. Benchmark accuracy on 468 held-out outages is under Evidence.";
+    ? "Every fault injected into this lab so far, early test runs included. Benchmark results are under Evidence."
+    : "Live outages are counted here as they finish. Benchmark results are under Evidence.";
 }
 function renderQueue(q) {
   const box = $("#queue"); box.replaceChildren();
