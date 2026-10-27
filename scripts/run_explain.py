@@ -11,6 +11,8 @@ Rankers:
 - spark-one-shot: one prompt with the same top deviations
 - spark-agent: tool-using investigation, metrics only
 - spark-agent-all: tool-using investigation with logs and traces where the case has them
+- open-one-shot, open-agent, open-agent-all: the same three on Muse Spark Open, Meta's
+  open-weight model, served by Baseten; only the model and provider change
 - baro, nsigma, mmbaro: published methods, from runs/baselines/ (scripts/run_baselines.py)
 
 The investigation is anchored at the benchmark's inject time, which is how
@@ -38,16 +40,23 @@ from src.config import DEFAULT  # noqa: E402
 from src.evaluate_explain import (CaseResult, bootstrap_ci, breakdown, calibration, hits, mcnemar,  # noqa: E402
                                   score)
 from src.explain import no_ai_ranking, spark_one_shot  # noqa: E402
-from src.llm import DEFAULT_MODEL, client  # noqa: E402
+from src.llm import PROVIDERS, client  # noqa: E402
 from src.load_rcaeval import case_index, load_case, load_labels  # noqa: E402
 from src.provenance import git_state  # noqa: E402
 from src.splits import case_ids  # noqa: E402
 from src.tools import Investigation  # noqa: E402
 
 BASELINES = {"baro", "nsigma", "mmbaro"}
-LLM_RANKERS = {"spark-one-shot", "spark-agent", "spark-agent-all"}
-RANKERS = sorted(BASELINES | LLM_RANKERS | {"no-ai"})
-AGENT_SOURCES = {"spark-agent": frozenset({"metrics"}), "spark-agent-all": frozenset({"metrics", "logs", "traces"})}
+# ranker -> (method, provider, sources the agent may use)
+LLM_RANKERS = {
+    "spark-one-shot": ("one-shot", "meta", None),
+    "spark-agent": ("agent", "meta", frozenset({"metrics"})),
+    "spark-agent-all": ("agent", "meta", frozenset({"metrics", "logs", "traces"})),
+    "open-one-shot": ("one-shot", "baseten", None),
+    "open-agent": ("agent", "baseten", frozenset({"metrics"})),
+    "open-agent-all": ("agent", "baseten", frozenset({"metrics", "logs", "traces"})),
+}
+RANKERS = sorted(BASELINES | set(LLM_RANKERS) | {"no-ai"})
 
 
 def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:
@@ -57,10 +66,12 @@ def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:
     trail, turns = [], None
     if ranker == "no-ai":
         ranking = no_ai_ranking(inv)
-    elif ranker == "spark-one-shot":
+    elif LLM_RANKERS[ranker][0] == "one-shot":
         ranking = spark_one_shot(inv, cache, model)
+        ranking.ranker = ranker
     else:
-        run = investigate(inv, cache, model, AGENT_SOURCES[ranker], DEFAULT.investigation.max_steps, ranker)
+        sources = LLM_RANKERS[ranker][2]
+        run = investigate(inv, cache, model, sources, DEFAULT.investigation.max_steps, ranker)
         ranking, trail, turns = run.ranking, run.trail, run.turns
     return {"case_id": case_id, "services": None if ranking.error else ranking.services,
             "causes": ranking.causes, "error": ranking.error, "usage": ranking.usage, "turns": turns,
@@ -105,7 +116,9 @@ def main():
     parser.add_argument("--no-record", action="store_true")
     args = parser.parse_args()
 
-    cfg, model = DEFAULT, DEFAULT_MODEL
+    cfg = DEFAULT
+    provider = LLM_RANKERS[args.ranker][1] if args.ranker in LLM_RANKERS else None
+    model = PROVIDERS[provider].model if provider else None
     index, labels = case_index(args.suite), load_labels(args.suite)
     ids = case_ids(args.suite, args.part)[: args.limit]
     commit, dirty = git_state()
@@ -120,7 +133,7 @@ def main():
         cache = None
         if args.ranker in LLM_RANKERS:
             cache = ModelCache(ROOT / "runs" / "llm" / f"{args.ranker}_{args.suite}.jsonl.gz",
-                               client=None if args.offline else client(), offline=args.offline)
+                               client=None if args.offline else client(provider), offline=args.offline)
         records, done = [], 0
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             futures = {pool.submit(run_case, args.ranker, args.suite, c, index[c], labels[c].inject_time,
@@ -178,7 +191,7 @@ def main():
     entry = {"run_id": uuid.uuid4().hex[:12], "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
              "git_commit": commit, "git_dirty": dirty, "suite": args.suite, "part": args.part,
              "ranker": args.ranker, "anchor": "inject_time",
-             "model": model if args.ranker in LLM_RANKERS else None,
+             "provider": provider, "model": model,
              "config_id": cfg.section_id("investigation", "stats"), "config": cfg.sections("investigation", "stats"),
              "summary": summary, "ci95": ci, "by_system": by_system, "by_fault": by_fault,
              "vs_no_ai": versus, "calibration": cal, "usage": usage}
