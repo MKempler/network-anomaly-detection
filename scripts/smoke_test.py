@@ -4,7 +4,7 @@ Uses synthetic data only, so no benchmark case is sent. Each check prints pass
 or fail, plus token usage and cost at Standard and Contributor prices.
 
     python scripts/smoke_test.py
-    python scripts/smoke_test.py --model muse-spark-1.3-contributor
+    python scripts/smoke_test.py --provider baseten        # Muse Spark Open
 """
 
 import argparse
@@ -24,7 +24,7 @@ import numpy as np  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.llm import DEFAULT_MODEL, client  # noqa: E402
+from src.llm import PROVIDERS, client  # noqa: E402
 
 PRICES = {  # USD per 1M tokens: (input, output)
     "standard": (1.25, 4.25),
@@ -188,15 +188,17 @@ def check_image(api, model, usage):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--provider", default="meta", choices=sorted(PROVIDERS))
+    parser.add_argument("--model", help="default: the provider's model")
     args = parser.parse_args()
+    args.model = args.model or PROVIDERS[args.provider].model
 
-    api, usage, results = client(), Usage(), {}
+    api, usage, results = client(args.provider), Usage(), {}
     checks = [("structured output with per-case enums", check_structured),
               ("enum holds when the prompt pushes an invented service", check_enum_holds_under_pressure),
               ("tool-calling loop (Responses API, stateless replay)", check_tool_loop),
               ("image input", check_image)]
-    print(f"model={args.model}")
+    print(f"provider={args.provider} model={args.model}")
     for label, check in checks:
         try:
             ok, detail = check(api, args.model, usage)
@@ -208,11 +210,12 @@ def main():
     print("\ntokens per call:")
     for c in usage.calls:
         print(f"  {c['check']:<14} input {c['input']:>6}  output {c['output']:>6}  (reasoning {c['reasoning']})")
-    print(f"total cost: ${usage.cost('standard'):.4f} at Standard prices, "
-          f"${usage.cost('contributor'):.4f} at Contributor prices")
+    if args.provider == "meta":
+        print(f"total cost: ${usage.cost('standard'):.4f} at Standard prices, "
+              f"${usage.cost('contributor'):.4f} at Contributor prices")
 
     record = {"timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-              "model": args.model, "results": results, "calls": usage.calls}
+              "provider": args.provider, "model": args.model, "results": results, "calls": usage.calls}
     (ROOT / "runs").mkdir(exist_ok=True)
     with open(ROOT / "runs" / "smoke_test.jsonl", "a") as f:
         f.write(json.dumps(record) + "\n")

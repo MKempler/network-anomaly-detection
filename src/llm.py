@@ -1,38 +1,56 @@
-"""Meta Model API client.
+"""Clients for the two ways we run Meta's models.
 
-The API is OpenAI-compatible at https://api.meta.ai/v1. The key is read from
-MODEL_API_KEY in the environment or in a git-ignored .env file at the repo
-root, and is never logged.
+- meta: Meta Model API, hosted Muse Spark 1.3 (https://api.meta.ai/v1)
+- baseten: Baseten, Muse Spark Open, Meta's open-weight model
+  (https://inference.baseten.co/v1)
+
+Both are OpenAI-compatible and both serve the Responses API, so the same
+rankers and agent loop run unchanged on either one. Keys are read from the
+environment or a git-ignored .env file at the repo root, and are never logged.
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from openai import OpenAI
 
-BASE_URL = "https://api.meta.ai/v1"
 ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
-# Contributor mode: the same Muse Spark 1.3 model at about a fifteenth of the
-# Standard price, in exchange for Meta being allowed to train on requests. Everything
-# sent is public benchmark data (SMD, RCAEval), so that trade is acceptable.
-DEFAULT_MODEL = "muse-spark-1.3-contributor"
-
-
-def api_key() -> str:
-    if key := os.environ.get("MODEL_API_KEY"):
-        return key
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            name, sep, value = line.partition("=")
-            if sep and name.strip() == "MODEL_API_KEY" and value.strip():
-                return value.strip()
-    raise RuntimeError("MODEL_API_KEY is not set (environment or .env)")
-
 
 # A stuck connection otherwise waits the SDK default of 10 minutes per attempt;
 # one agent case hung for almost two hours that way. Typical calls take ~25 s.
 REQUEST_TIMEOUT_S = 120
 
 
-def client() -> OpenAI:
-    return OpenAI(base_url=BASE_URL, api_key=api_key(), max_retries=5, timeout=REQUEST_TIMEOUT_S)
+@dataclass(frozen=True)
+class Provider:
+    base_url: str
+    key_name: str
+    model: str
+
+
+PROVIDERS = {
+    # Contributor mode: the same Muse Spark 1.3 model at about a fifteenth of the
+    # Standard price, in exchange for Meta being allowed to train on requests.
+    # Everything sent is public benchmark data (SMD, RCAEval), so that trade is acceptable.
+    "meta": Provider("https://api.meta.ai/v1", "MODEL_API_KEY", "muse-spark-1.3-contributor"),
+    # The hackathon key only works with this exact model name.
+    "baseten": Provider("https://inference.baseten.co/v1", "BASETEN_API_KEY", "meta-models/muse-spark-open-1026"),
+}
+DEFAULT_MODEL = PROVIDERS["meta"].model
+
+
+def api_key(name: str = "MODEL_API_KEY") -> str:
+    if key := os.environ.get(name):
+        return key
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text().splitlines():
+            key_name, sep, value = line.partition("=")
+            if sep and key_name.strip() == name and value.strip():
+                return value.strip()
+    raise RuntimeError(f"{name} is not set (environment or .env)")
+
+
+def client(provider: str = "meta") -> OpenAI:
+    p = PROVIDERS[provider]
+    return OpenAI(base_url=p.base_url, api_key=api_key(p.key_name), max_retries=5, timeout=REQUEST_TIMEOUT_S)
