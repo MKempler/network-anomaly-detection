@@ -247,5 +247,8 @@ def serve():
            "--enable-auto-tool-choice", "--tool-call-parser", "muse_glimmer",
            "--reasoning-parser", "muse_glimmer", "--generation-config", "auto"]
     if adapter.exists():
-        cmd += ["--enable-lora", "--max-lora-rank", "64", "--lora-modules", f"glimmer-tuned={adapter}"]
+        # Text only: start-up otherwise profiles the vision encoder with a dummy image, and vLLM's LoRA
+        # wrapping of the vision layers fails on patch inputs. The adapter leaves vision untouched.
+        cmd += ["--enable-lora", "--max-lora-rank", "64", "--lora-modules", f"glimmer-tuned={adapter}",
+                "--limit-mm-per-prompt", json.dumps({"image": 0, "video": 0})]
     subprocess.Popen(cmd)
