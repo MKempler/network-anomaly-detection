@@ -223,3 +223,28 @@ def test_fault_is_reverted_even_if_the_investigation_crashes(tmp_path):
     with pytest.raises(RuntimeError):
         lab.run(lab.waiting.popleft())
     assert inj.log[-1] == ("revert", "cartservice", "delay")
+
+
+def test_span_reader_skips_a_half_written_line_and_resumes(tmp_path):
+    from src.lab.telemetry import Telemetry
+    path = tmp_path / "spans.jsonl"
+    full = otlp_line("cart", [span(100.0, 10, sid="a")])
+    partial = otlp_line("cart", [span(101.0, 10, sid="b")])
+    path.write_text(full + "\n" + partial[:40])
+    tel = Telemetry(docker_client=None, spans_file=path)
+    pos = tel._read_spans(0)
+    assert [s["span_id"] for s in tel.spans] == ["a"]
+    path.write_text(full + "\n" + partial + "\n")
+    tel._read_spans(pos)
+    assert [s["span_id"] for s in tel.spans] == ["a", "b"]
+
+
+def test_rows_wait_for_late_spans_before_being_finalized(tmp_path):
+    from src.lab.telemetry import Telemetry
+    tel = Telemetry(docker_client=None, spans_file=tmp_path / "none.jsonl")
+    tel._pending[100] = {"cart_cpu": 1.0}
+    tel.spans.extend(parse_spans(otlp_line("cart", [span(100.2, 50)])))   # arrives late, before finalizing
+    tel._finalize(100)
+    [(second, row)] = list(tel.rows)
+    assert second == 100 and row["cart_cpu"] == 1.0 and row["cart_workload"] == 1
+    assert 100 not in tel._pending

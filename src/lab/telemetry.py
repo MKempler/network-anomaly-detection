@@ -23,6 +23,7 @@ import pandas as pd
 from src.load_rcaeval import Case
 
 KEEP_S = 1800   # seconds of history kept in memory
+SPAN_GRACE_S = 6  # spans reach the file 1-6 s after they end; a second's row waits this long
 
 
 def cpu_percent(stats: dict) -> float:
@@ -92,6 +93,7 @@ class Telemetry:
         self.logs: deque[dict] = deque(maxlen=200_000)
         self.latest: dict[str, dict] = {}
         self._previous: dict[str, tuple[float, float]] = {}
+        self._pending: dict[int, dict] = {}   # second -> container metrics, waiting for its spans
         self._lock = threading.Lock()
         self._stop = threading.Event()
 
@@ -132,28 +134,53 @@ class Telemetry:
         position = 0
         while not self._stop.is_set():
             try:
-                with open(self.spans_file) as f:
-                    f.seek(0, 2)
-                    if f.tell() < position:      # rotated
-                        position = 0
-                    f.seek(position)
-                    for line in f:
-                        if line.strip():
-                            parsed = parse_spans(line)
-                            with self._lock:
-                                self.spans.extend(parsed)
-                    position = f.tell()
+                position = self._read_spans(position)
             except FileNotFoundError:
                 pass
+            except Exception as error:   # never let one bad read stop span collection
+                print(f"telemetry: span read failed: {type(error).__name__}: {error}", flush=True)
             time.sleep(0.5)
+
+    def _read_spans(self, position: int) -> int:
+        """Parse complete lines after `position`; a line still being written is left for the next pass."""
+        with open(self.spans_file, "rb") as f:
+            size = f.seek(0, 2)
+            if size < position:              # the collector rotated the file
+                position = 0
+            f.seek(position)
+            chunk = f.read()
+        end = chunk.rfind(b"\n")
+        if end < 0:
+            return position
+        for line in chunk[:end].split(b"\n"):
+            if line.strip():
+                try:
+                    parsed = parse_spans(line.decode())
+                except (ValueError, KeyError):
+                    continue
+                with self._lock:
+                    self.spans.extend(parsed)
+        return position + end + 1
 
     def _tick_loop(self):
         while not self._stop.is_set():
-            second = int(time.time()) - 2       # let late spans arrive
-            self._record(second)
+            now = int(time.time())
+            self._pending[now] = self._container_row()
+            self._finalize(now - SPAN_GRACE_S)
             time.sleep(max(0.0, 1 - (time.time() % 1)))
 
-    def _record(self, second: int):
+    def _finalize(self, second: int):
+        """Join a second's container metrics with its spans, once those have had time to arrive."""
+        row = self._pending.pop(second, None)
+        for stale in [t for t in self._pending if t < second]:
+            del self._pending[stale]
+        if row is None:
+            return
+        with self._lock:
+            row.update(span_metrics([s for s in self.spans if s["end"] >= second - 1], second))
+            self.rows.append((second, row))
+
+    def _container_row(self) -> dict:
         row = {}
         for service, stats in list(self.latest.items()):
             row[f"{service}_cpu"] = cpu_percent(stats)
@@ -163,9 +190,7 @@ class Telemetry:
             row[f"{service}_net"] = max(net - prev_net, 0.0) / 1e3
             row[f"{service}_diskio"] = max(disk - prev_disk, 0.0) / 1e3
             self._previous[service] = (net, disk)
-        with self._lock:
-            row.update(span_metrics([s for s in self.spans if s["end"] >= second - 1], second))
-            self.rows.append((second, row))
+        return row
 
     # -- reading ---------------------------------------------------------------
 
