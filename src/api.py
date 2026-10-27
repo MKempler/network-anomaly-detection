@@ -27,6 +27,12 @@ the shared live system:
 - GET  /api/live/slack/{incident_id}          the Slack message for a finished incident
                                               (posted automatically if SLACK_WEBHOOK_URL)
 
+The user study (scripts/user_study/) is served on any host:
+- GET  /api/study/{slot}                      a participant slot's case order and conditions
+- GET  /api/study/case/{case_id}?tool=0|1     charts only, or charts plus Epicenter's
+                                              investigation; never the answer
+- POST /api/study/answer, /api/study/exit     one answer; the closing questions
+
 Everything served comes from the committed records under runs/, imported into
 the database at startup, so the console needs no raw benchmark data.
 """
@@ -316,6 +322,76 @@ def live_slack(incident_id: str, request: Request):
         if record["id"] == incident_id:
             return slack_message(record)
     raise HTTPException(404, "unknown incident")
+
+
+STUDY = ROOT / "runs" / "study"
+
+
+def _study_plan() -> dict:
+    path = STUDY / "plan.json"
+    if not path.exists():
+        raise HTTPException(404, "no study configured on this server")
+    return json.loads(path.read_text())
+
+
+@app.get("/api/study/{slot}")
+def study_slot(slot: int):
+    plan = _study_plan()
+    if not 0 <= slot < len(plan["slots"]):
+        raise HTTPException(404, "unknown slot")
+    return {"slot": slot, "cases": plan["slots"][slot]}
+
+
+@app.get("/api/study/case/{case_id}")
+def study_case(case_id: str, tool: bool = False):
+    if case_id not in _study_plan()["cases"]:
+        raise HTTPException(404, "unknown case")
+    bundle = json.loads((STUDY / "cases" / f"{case_id}.json").read_text())
+    if not tool:
+        bundle.pop("trail", None)
+        bundle.pop("causes", None)
+    return bundle
+
+
+class StudyAnswer(BaseModel):
+    participant: str = Field(pattern="^[A-Za-z0-9-]{2,16}$")
+    slot: int = Field(ge=0, le=31)
+    case_id: str = Field(max_length=32)
+    tool: bool
+    answer: str = Field(max_length=64)
+    confidence: int = Field(ge=1, le=5)
+    seconds: float = Field(ge=0, le=7200)
+
+
+class StudyExit(BaseModel):
+    participant: str = Field(pattern="^[A-Za-z0-9-]{2,16}$")
+    would_use: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=1000)
+    quote_ok: bool = False
+    display_name: str = Field(default="", max_length=60)
+
+
+def _append(name: str, entry: dict):
+    STUDY.mkdir(parents=True, exist_ok=True)
+    with open(STUDY / name, "a") as f:
+        f.write(json.dumps({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **entry}) + "\n")
+
+
+@app.post("/api/study/answer")
+def study_answer(body: StudyAnswer):
+    if body.case_id not in _study_plan()["cases"]:
+        raise HTTPException(404, "unknown case")
+    _append("answers.jsonl", body.model_dump())
+    return {"ok": True}
+
+
+@app.post("/api/study/exit")
+def study_exit(body: StudyExit):
+    entry = body.model_dump()
+    if not entry["quote_ok"]:
+        entry["display_name"] = ""          # a name is kept only with permission to quote
+    _append("exit.jsonl", entry)
+    return {"ok": True}
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

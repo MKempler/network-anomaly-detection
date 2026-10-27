@@ -162,3 +162,44 @@ def test_slack_preview_for_a_recorded_incident(client, live):
     msg = client.get(f"/api/live/slack/{incident.id}").json()
     assert msg["text"].startswith("Likely root cause: cartservice")
     assert client.get("/api/live/slack/nope").status_code == 404
+
+
+# -- user study ------------------------------------------------------------------
+
+def test_study_slots_are_counterbalanced(client):
+    plan = [client.get(f"/api/study/{s}").json()["cases"] for s in range(6)]
+    for slot in plan:
+        assert sum(c["tool"] for c in slot) == 3
+    by_case = {}
+    for slot in plan:
+        for c in slot:
+            by_case.setdefault(c["case_id"], set()).add(c["tool"])
+    assert all(v == {True, False} for v in by_case.values())
+    assert client.get("/api/study/99").status_code == 404
+
+
+def test_study_case_never_includes_the_answer(client):
+    cid = client.get("/api/study/0").json()["cases"][0]["case_id"]
+    bare = client.get(f"/api/study/case/{cid}").json()
+    tool = client.get(f"/api/study/case/{cid}?tool=1").json()
+    assert "trail" not in bare and "causes" not in bare and bare["candidates"]
+    assert tool["trail"] and tool["causes"]
+    for b in (bare, tool):
+        assert "answer" not in b and "answer_key" not in json.dumps(b)
+    assert client.get("/api/study/case/re2-not-in-study").status_code == 404
+
+
+def test_study_answers_validate_and_names_need_quote_permission(client, tmp_path, monkeypatch):
+    import src.api as api
+    real = api.STUDY
+    monkeypatch.setattr(api, "STUDY", tmp_path)
+    (tmp_path / "plan.json").write_text((real / "plan.json").read_text())
+    cid = json.loads((real / "plan.json").read_text())["cases"][0]
+    ok = {"participant": "p01", "slot": 0, "case_id": cid, "tool": True, "answer": "cart", "confidence": 4, "seconds": 93.5}
+    assert client.post("/api/study/answer", json=ok).json() == {"ok": True}
+    assert client.post("/api/study/answer", json={**ok, "participant": "<script>"}).status_code == 422
+    assert client.post("/api/study/answer", json={**ok, "confidence": 9}).status_code == 422
+    client.post("/api/study/exit", json={"participant": "p01", "would_use": 5, "display_name": "Sam", "quote_ok": False})
+    client.post("/api/study/exit", json={"participant": "p02", "would_use": 4, "display_name": "Ana", "quote_ok": True})
+    exits = [json.loads(l) for l in (tmp_path / "exit.jsonl").read_text().splitlines()]
+    assert [e["display_name"] for e in exits] == ["", "Ana"]
