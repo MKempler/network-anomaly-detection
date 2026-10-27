@@ -36,6 +36,8 @@
 }
 * { box-sizing: border-box; border-radius: 0 !important; }
 [hidden] { display: none !important; }
+/* study mode: no way to wander into the replay library, where answers can be revealed */
+body.studying nav, body.studying .statusline { display: none !important; }
 html, body { margin: 0; background: var(--surface); color: var(--ink); }
 body { font: 14px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
 button, select, input, textarea { font: inherit; color: inherit; }
@@ -294,6 +296,47 @@ nav button.theme { width: 48px; padding: 0; }
 <!-- EVIDENCE -------------------------------------------------------------- -->
 <section class="view" id="view-evidence" aria-label="evaluation results">
   <div class="evidence" id="evidence-body"></div>
+</section>
+
+<!-- STUDY (private link: #study/<slot>/<participant code>) -------------------- -->
+<section class="view" id="view-study" aria-label="user study">
+  <div class="rail" id="study-rail"></div>
+  <div id="study-intro" class="evidence">
+    <h1>Find the root cause</h1>
+    <p class="lede">You'll look at six recorded outages from microservice systems. Each shows the metrics that moved most around the moment an alarm fired. Pick the service you think caused the outage. For some outages you'll also see what Epicenter, an AI investigator, found. Work as you normally would; there's no trick and no penalty for being wrong. Time starts when an outage opens.</p>
+    <button class="btn solid" id="study-start">Start</button>
+  </div>
+  <div id="study-case" class="frame" hidden>
+    <div class="col">
+      <div class="block"><span class="label" id="study-title"></span></div>
+      <div class="strips" id="study-strips"></div>
+    </div>
+    <div class="col" style="grid-column: span 2">
+      <div id="study-tool" hidden>
+        <div class="block"><h3 class="label">Epicenter · flight log</h3></div>
+        <div class="log scroll" id="study-log" style="max-height:34vh"></div>
+        <div class="block"><h3 class="label">Epicenter · verdict</h3><table class="verdict" id="study-verdict"></table></div>
+      </div>
+      <div class="block">
+        <h3 class="label">Your answer · which service caused this outage?</h3>
+        <div class="picker" id="study-candidates" style="grid-template-columns: repeat(3, 1fr)"></div>
+        <div class="label" style="margin:14px 0 6px">How confident are you?</div>
+        <div class="picker" id="study-confidence" style="grid-template-columns: repeat(5, 1fr)"></div>
+        <div class="row-btns"><button class="btn solid" id="study-submit">Submit answer</button><span class="mono" id="study-msg" role="status"></span></div>
+      </div>
+    </div>
+  </div>
+  <div id="study-exit" class="evidence" hidden>
+    <h1>Last three questions</h1>
+    <div class="label" style="margin:18px 0 6px">Would you use a tool like Epicenter on call? (1 = no, 5 = definitely)</div>
+    <div class="picker" id="study-use" style="grid-template-columns: repeat(5, 1fr); max-width: 420px"></div>
+    <div class="label" style="margin:18px 0 6px">Anything it would need, or anything that got in your way?</div>
+    <textarea id="study-comment" rows="4" maxlength="1000" style="width:100%; max-width:640px; background:var(--raised); border:1px solid var(--rule-strong); padding:8px"></textarea>
+    <div style="margin:14px 0"><label class="mono"><input type="checkbox" id="study-quote"> You may quote my comment</label></div>
+    <div class="label" style="margin:0 0 6px">Name and role to show with a quote (optional)</div>
+    <input id="study-name" maxlength="60" style="width:100%; max-width:420px; background:var(--raised); border:1px solid var(--rule-strong); padding:8px">
+    <div class="row-btns"><button class="btn solid" id="study-finish">Finish</button><span class="mono" id="study-done" role="status"></span></div>
+  </div>
 </section>
 
 <div class="tip" id="tip"></div>
@@ -706,9 +749,59 @@ document.querySelectorAll("#live-feedback [data-vote]").forEach((b) => b.onclick
   $("#fb-msg").textContent = "thanks"; live.feedbackFor = null;
 });
 
+/* ---- user study -------------------------------------------------------------- */
+const study = { slot: null, code: null, cases: [], at: 0, opened: 0 };
+function radios(id, name, values, labels) {
+  const box = $(`#${id}`); box.replaceChildren();
+  values.forEach((v, i) => { const l = el("label"); const r = el("input"); r.type = "radio"; r.name = name; r.value = v; l.append(r, document.createTextNode(labels ? labels[i] : v)); box.append(l); });
+}
+async function startStudy(slot, code) {
+  study.slot = Number(slot); study.code = code;
+  document.body.classList.add("studying");
+  study.cases = (await api(`/api/study/${study.slot}`)).cases; study.at = 0;
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("on", v.id === "view-study"));
+  $("#study-intro").hidden = false; $("#study-case").hidden = true; $("#study-exit").hidden = true;
+  renderRail("study-rail", "intro", {}, () => "", ["intro", ...study.cases.map((_, i) => `outage ${i + 1}`), "done"]);
+}
+async function openStudyCase() {
+  const item = study.cases[study.at];
+  const b = await api(`/api/study/case/${item.case_id}?tool=${item.tool ? 1 : 0}`);
+  $("#study-intro").hidden = true; $("#study-case").hidden = false; $("#study-msg").textContent = "";
+  renderRail("study-rail", `outage ${study.at + 1}`, {}, () => "", ["intro", ...study.cases.map((_, i) => `outage ${i + 1}`), "done"]);
+  $("#study-title").textContent = `Outage ${study.at + 1} of ${study.cases.length} · ${b.system_name} · ${item.tool ? "with Epicenter" : "charts only"}`;
+  mountStrips("study-strips", b.series, [-b.window.baseline_s, b.window.window_s], { alarm: 0 });
+  $("#study-tool").hidden = !item.tool; $("#study-log").replaceChildren(); $("#study-verdict").replaceChildren();
+  if (item.tool) { b.trail.filter((x) => x.type !== "submit").forEach((x, i) => logStep("study-log", x, "#" + String(i + 1).padStart(2, "0"))); renderVerdict("study-verdict", b.causes); }
+  radios("study-candidates", "study-answer", b.candidates);
+  radios("study-confidence", "study-conf", ["1", "2", "3", "4", "5"], ["1 · guess", "2", "3", "4", "5 · sure"]);
+  study.opened = performance.now(); window.scrollTo(0, 0);
+}
+$("#study-start").onclick = openStudyCase;
+$("#study-submit").onclick = async () => {
+  const answer = document.querySelector("input[name=study-answer]:checked")?.value, conf = document.querySelector("input[name=study-conf]:checked")?.value;
+  if (!answer || !conf) { $("#study-msg").textContent = "pick a service and a confidence"; return; }
+  const item = study.cases[study.at], seconds = Math.round((performance.now() - study.opened) / 100) / 10;
+  await api("/api/study/answer", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ participant: study.code, slot: study.slot, case_id: item.case_id, tool: item.tool, answer, confidence: Number(conf), seconds }) });
+  study.at += 1;
+  if (study.at < study.cases.length) return openStudyCase();
+  $("#study-case").hidden = true; $("#study-exit").hidden = false;
+  renderRail("study-rail", "done", {}, () => "", ["intro", ...study.cases.map((_, i) => `outage ${i + 1}`), "done"]);
+  radios("study-use", "study-use", ["1", "2", "3", "4", "5"]);
+};
+$("#study-finish").onclick = async () => {
+  const use = document.querySelector("input[name=study-use]:checked")?.value;
+  if (!use) { $("#study-done").textContent = "pick 1 to 5"; return; }
+  await api("/api/study/exit", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ participant: study.code, would_use: Number(use), comment: $("#study-comment").value, quote_ok: $("#study-quote").checked, display_name: $("#study-name").value }) });
+  $("#study-done").textContent = "Thank you. You can close this tab.";
+  $("#study-finish").disabled = true;
+};
+
 /* ---- deep links: #live, #evidence, #replay, #replay/RE2/<case id>[/play] ---- */
 async function route() {
   const [view, suite, caseId, action] = location.hash.slice(1).split("/");
+  if (view === "study" && suite && /^[A-Za-z0-9-]{2,16}$/.test(caseId || "")) return startStudy(suite, caseId);
   if (view === "replay" && suite) {
     show("replay"); await loadSuite(suite);
     if (caseId) { await openCase(caseId); if (action === "play") $("#play-btn").click(); }
