@@ -36,7 +36,10 @@ class Provider:
     url_name: str = ""          # read the base URL from this setting instead (a server we deploy)
     chat: bool = False          # serves Chat Completions only
     timeout_s: int = REQUEST_TIMEOUT_S
+    headers: tuple = ()         # (HTTP header, setting it is read from) sent on every request
 
+
+MODAL_PROXY_AUTH = (("Modal-Key", "MODAL_PROXY_KEY"), ("Modal-Secret", "MODAL_PROXY_SECRET"))
 
 PROVIDERS = {
     # Contributor mode: the same Muse Spark 1.3 model at about a fifteenth of the
@@ -46,10 +49,12 @@ PROVIDERS = {
     # The hackathon key only works with this exact model name.
     "baseten": Provider("https://inference.baseten.co/v1", "BASETEN_API_KEY", "meta-models/muse-spark-open-1026"),
     # One vLLM server holds the base model and the LoRA adapter; the model name picks one.
-    # Many investigations share one GPU, so a turn can wait in the queue for a while.
-    "glimmer": Provider("", "GLIMMER_API_KEY", "muse-glimmer", url_name="GLIMMER_BASE_URL", chat=True, timeout_s=600),
+    # Many investigations share one GPU, so a turn can wait in the queue for a while. Modal's
+    # proxy-auth headers let its edge refuse unauthenticated requests before a GPU starts.
+    "glimmer": Provider("", "GLIMMER_API_KEY", "muse-glimmer", url_name="GLIMMER_BASE_URL", chat=True,
+                        timeout_s=600, headers=MODAL_PROXY_AUTH),
     "glimmer-tuned": Provider("", "GLIMMER_API_KEY", "glimmer-tuned", url_name="GLIMMER_BASE_URL", chat=True,
-                              timeout_s=600),
+                              timeout_s=600, headers=MODAL_PROXY_AUTH),
 }
 DEFAULT_MODEL = PROVIDERS["meta"].model
 
@@ -68,5 +73,6 @@ def api_key(name: str = "MODEL_API_KEY") -> str:
 def client(provider: str = "meta"):
     p = PROVIDERS[provider]
     base_url = api_key(p.url_name) if p.url_name else p.base_url
-    c = OpenAI(base_url=base_url, api_key=api_key(p.key_name), max_retries=5, timeout=p.timeout_s)
+    c = OpenAI(base_url=base_url, api_key=api_key(p.key_name), max_retries=5, timeout=p.timeout_s,
+               default_headers={header: api_key(name) for header, name in p.headers} or None)
     return ChatAsResponses(c) if p.chat else c

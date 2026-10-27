@@ -68,3 +68,13 @@ def test_adapter_round_trip_keeps_glimmer_reasoning_in_the_conversation():
     assert out2["output"]
     assert fake.sent["messages"][2]["tool_calls"][0]["function"]["arguments"] == '{"service": "cart"}'
 
+
+
+def test_glimmer_clients_send_modal_proxy_auth(monkeypatch):
+    from src.llm import client
+    for name, value in {"GLIMMER_API_KEY": "k", "GLIMMER_BASE_URL": "https://example.invalid/v1",
+                        "MODAL_PROXY_KEY": "wk-test", "MODAL_PROXY_SECRET": "ws-test"}.items():
+        monkeypatch.setenv(name, value)
+    c = client("glimmer-tuned")
+    assert isinstance(c, ChatAsResponses)
+    assert c.chat.default_headers["Modal-Key"] == "wk-test" and c.chat.default_headers["Modal-Secret"] == "ws-test"

@@ -17,7 +17,9 @@ tensor.
 Serving uses Meta's vLLM image for Glimmer with its tool-call and reasoning
 parsers. One server holds the base model (`muse-glimmer`) and the trained
 adapter (`glimmer-tuned`), so base and tuned are evaluated on the same
-weights, server and settings. The endpoint requires GLIMMER_API_KEY, read from
+weights, server and settings. Two locks guard the endpoint: Modal's proxy auth
+(MODAL_PROXY_KEY / MODAL_PROXY_SECRET headers) turns a request away at Modal's
+edge, before a GPU starts, and vLLM itself requires GLIMMER_API_KEY, read from
 the local .env at deploy time.
 """
 
@@ -238,7 +240,7 @@ def main(epochs: int = 2, rank: int = 32, lr: float = 1e-4, accumulation: int = 
 @app.function(image=vllm_image, gpu="H200", volumes={"/weights": weights, "/runs": runs},
               secrets=[modal.Secret.from_dict(_api_key())], timeout=24 * 3600, scaledown_window=300)
 @modal.concurrent(max_inputs=64)
-@modal.web_server(8000, startup_timeout=1800)
+@modal.web_server(8000, startup_timeout=1800, requires_proxy_auth=True)
 def serve():
     adapter = Path("/runs") / RUN / "adapter"
     cmd = ["vllm", "serve", MODEL, "--revision", REVISION, "--served-model-name", "muse-glimmer",
