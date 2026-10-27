@@ -1,0 +1,25 @@
+# Receives spans from the Online Boutique services and writes them to a file
+# that the investigator tails. Rotation keeps the file small on a long-running demo.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  file:
+    path: /spans/spans.jsonl
+    rotation:
+      max_megabytes: 50
+      max_backups: 1
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file]

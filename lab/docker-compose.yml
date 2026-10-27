@@ -1,0 +1,177 @@
+# Live-outage lab: Online Boutique (Google's microservices demo, v0.10.5) plus
+# the investigator, on one machine.
+#
+#   docker compose -f lab/docker-compose.yml up -d
+#   open http://127.0.0.1:8000
+#
+# Service wiring, images and memory limits follow the official
+# release/kubernetes-manifests.yaml; tracing settings follow its
+# google-cloud-operations component, with spans written to a local file
+# instead of Google Cloud. Online Boutique publishes amd64 images only, so on
+# Apple silicon Docker Desktop runs them under emulation.
+#
+# The investigator container talks to the Docker engine to read live stats and
+# logs and to inject faults. It only accepts a fixed menu of faults against
+# containers labelled lab.service, and only its console port is published, on
+# 127.0.0.1, for a tunnel such as Tailscale Funnel to expose.
+
+x-ob: &ob
+  restart: unless-stopped
+  networks: [lab]
+
+x-traced: &traced
+  ENABLE_TRACING: "1"
+  COLLECTOR_SERVICE_ADDR: "otel-collector:4317"
+  DISABLE_PROFILER: "1"
+  ENABLE_PROFILER: "0"
+
+services:
+  frontend:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/frontend:v0.10.5
+    container_name: ob-frontend
+    labels: {lab.service: frontend}
+    mem_limit: 128m
+    environment:
+      <<: *traced
+      OTEL_SERVICE_NAME: frontend
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: productcatalogservice:3550
+      CURRENCY_SERVICE_ADDR: currencyservice:7000
+      CART_SERVICE_ADDR: cartservice:7070
+      RECOMMENDATION_SERVICE_ADDR: recommendationservice:8080
+      SHIPPING_SERVICE_ADDR: shippingservice:50051
+      CHECKOUT_SERVICE_ADDR: checkoutservice:5050
+      AD_SERVICE_ADDR: adservice:9555
+      SHOPPING_ASSISTANT_SERVICE_ADDR: shoppingassistantservice:80
+
+  checkoutservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/checkoutservice:v0.10.5
+    container_name: ob-checkoutservice
+    labels: {lab.service: checkoutservice}
+    mem_limit: 128m
+    environment:
+      <<: *traced
+      OTEL_SERVICE_NAME: checkoutservice
+      PORT: "5050"
+      PRODUCT_CATALOG_SERVICE_ADDR: productcatalogservice:3550
+      SHIPPING_SERVICE_ADDR: shippingservice:50051
+      PAYMENT_SERVICE_ADDR: paymentservice:50051
+      EMAIL_SERVICE_ADDR: emailservice:8080   # Kubernetes maps 5000 -> 8080; Compose has no service port mapping
+      CURRENCY_SERVICE_ADDR: currencyservice:7000
+      CART_SERVICE_ADDR: cartservice:7070
+
+  productcatalogservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/productcatalogservice:v0.10.5
+    container_name: ob-productcatalogservice
+    labels: {lab.service: productcatalogservice}
+    mem_limit: 128m
+    environment: {<<: *traced, OTEL_SERVICE_NAME: productcatalogservice, PORT: "3550"}
+
+  currencyservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/currencyservice:v0.10.5
+    container_name: ob-currencyservice
+    labels: {lab.service: currencyservice}
+    mem_limit: 128m
+    environment: {<<: *traced, OTEL_SERVICE_NAME: currencyservice, PORT: "7000"}
+
+  shippingservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/shippingservice:v0.10.5
+    container_name: ob-shippingservice
+    labels: {lab.service: shippingservice}
+    mem_limit: 128m
+    environment: {<<: *traced, OTEL_SERVICE_NAME: shippingservice, PORT: "50051"}
+
+  paymentservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/paymentservice:v0.10.5
+    container_name: ob-paymentservice
+    labels: {lab.service: paymentservice}
+    mem_limit: 128m
+    environment: {<<: *traced, OTEL_SERVICE_NAME: paymentservice, PORT: "50051"}
+
+  emailservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/emailservice:v0.10.5
+    container_name: ob-emailservice
+    labels: {lab.service: emailservice}
+    mem_limit: 128m
+    environment: {<<: *traced, OTEL_SERVICE_NAME: emailservice, PORT: "8080"}
+
+  recommendationservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/recommendationservice:v0.10.5
+    container_name: ob-recommendationservice
+    labels: {lab.service: recommendationservice}
+    mem_limit: 450m
+    environment:
+      <<: *traced
+      OTEL_SERVICE_NAME: recommendationservice
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: productcatalogservice:3550
+
+  cartservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/cartservice:v0.10.5
+    container_name: ob-cartservice
+    labels: {lab.service: cartservice}
+    mem_limit: 128m
+    environment: {REDIS_ADDR: "redis-cart:6379"}
+
+  adservice:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/adservice:v0.10.5
+    container_name: ob-adservice
+    labels: {lab.service: adservice}
+    mem_limit: 300m
+    environment: {PORT: "9555"}
+
+  redis-cart:
+    <<: *ob
+    image: redis:7.2-alpine
+    container_name: ob-redis-cart
+    labels: {lab.service: redis-cart}
+    mem_limit: 256m
+
+  loadgenerator:
+    <<: *ob
+    image: us-central1-docker.pkg.dev/google-samples/microservices-demo/loadgenerator:v0.10.5
+    container_name: ob-loadgenerator
+    mem_limit: 512m
+    environment: {FRONTEND_ADDR: "frontend:8080", USERS: "10", RATE: "1"}
+    depends_on: [frontend]
+
+  otel-collector:
+    <<: *ob
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: ob-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otel/config.yaml:ro
+      - spans:/spans
+
+  investigator:
+    restart: unless-stopped
+    networks: [lab]
+    build: {context: .., dockerfile: Dockerfile}
+    container_name: investigator
+    environment:
+      LAB_ENABLED: "1"
+      LAB_SPANS_FILE: /spans/spans.jsonl
+      DATABASE_URL: "sqlite:////app/data/app.db"
+    env_file: [../.env]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - spans:/spans:ro
+      - ../runs/live:/app/runs/live
+    ports: ["127.0.0.1:8000:8000"]
+
+networks:
+  lab: {}
+
+volumes:
+  spans: {}
