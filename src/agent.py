@@ -113,12 +113,19 @@ class AgentRun:
 
 
 def investigate(inv: Investigation, cache: ModelCache, model: str, sources: frozenset[str],
-                max_steps: int = 10, ranker: str = "spark-agent") -> AgentRun:
+                max_steps: int = 10, ranker: str = "spark-agent", on_step=None) -> AgentRun:
+    """Run the investigation. `on_step`, if given, sees each trail entry as it happens (live view)."""
     text, _ = one_shot_input(inv)
     tools = tool_specs(inv, sources)
     conversation: list[dict] = [{"role": "user", "content": text}]
     usage = {"input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0, "model_seconds": 0.0}
     trail: list[dict] = []
+
+    def log(entry: dict):
+        trail.append(entry)
+        if on_step is not None:
+            on_step(entry)
+
     instructions = AGENT_INSTRUCTIONS.format(steps=max_steps)
 
     for turn in range(1, max_steps + 2):
@@ -132,7 +139,7 @@ def investigate(inv: Investigation, cache: ModelCache, model: str, sources: froz
             usage[key] += value
         conversation += [_clean(item) for item in response.get("output", [])]
         if note := output_text(response).strip():
-            trail.append({"turn": turn, "type": "note", "text": note})
+            log({"turn": turn, "type": "note", "text": note})
 
         calls = function_calls(response)
         submitted = next((c for c in calls if c["name"] == "submit_ranking"), None)
@@ -142,7 +149,7 @@ def investigate(inv: Investigation, cache: ModelCache, model: str, sources: froz
             except (json.JSONDecodeError, KeyError, TypeError) as error:
                 return AgentRun(Ranking(ranker, [], usage, error=f"unparseable submission: {error}"), trail, turn)
             causes = verify(causes, inv)
-            trail.append({"turn": turn, "type": "submit", "causes": causes})
+            log({"turn": turn, "type": "submit", "causes": causes})
             return AgentRun(Ranking(ranker, causes, usage), trail, turn)
 
         if not calls and not final:
@@ -156,7 +163,7 @@ def investigate(inv: Investigation, cache: ModelCache, model: str, sources: froz
             allowed = {t["name"] for t in tools}
             record = inv.call(call["name"], args) if call["name"] in allowed else \
                 inv.call("__not_offered__", {})
-            trail.append({"turn": turn, "type": "tool", "call_id": record.call_id, "name": call["name"],
+            log({"turn": turn, "type": "tool", "call_id": record.call_id, "name": call["name"],
                           "args": args, "evidence": record.evidence[:5], "error": record.result.get("error")})
             conversation.append({"type": "function_call_output", "call_id": call["call_id"],
                                  "output": inv.output(record)})
