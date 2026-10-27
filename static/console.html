@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident Investigator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #161b22; --panel-2: #1c232c; --line: #2a333e;
+    --text: #e6edf3; --muted: #8b98a5; --accent: #4f9cf9; --ok: #3fb950; --bad: #f85149;
+    --warn: #d29922; --window: rgba(248, 81, 73, 0.10); --radius: 10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f8fa; --panel: #ffffff; --panel-2: #f0f3f6; --line: #d0d7de; --text: #1f2328;
+            --muted: #59636e; --window: rgba(207, 34, 46, 0.08); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { margin: 0; font-size: 17px; }
+  header .tag { color: var(--muted); font-size: 13px; }
+  nav { margin-left: auto; display: flex; gap: 6px; }
+  nav button, .btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  nav button.active, .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  main { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 58px); }
+  aside { border-right: 1px solid var(--line); background: var(--panel); padding: 12px; overflow-y: auto; max-height: calc(100vh - 58px); }
+  aside .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  aside select { width: 100%; margin-bottom: 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px; font: inherit; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); cursor: pointer; }
+  .chip.on { color: var(--text); border-color: var(--accent); }
+  .case { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+  .case:hover { background: var(--panel-2); }
+  .case.selected { border-color: var(--accent); background: var(--panel-2); }
+  .case .meta { color: var(--muted); font-size: 12px; }
+  section.view { padding: 16px 20px; overflow-y: auto; max-height: calc(100vh - 58px); }
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .bar h2 { margin: 0 8px 0 0; font-size: 16px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .chart { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
+  .chart .title { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chart canvas { width: 100%; height: 110px; }
+  .columns { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-top: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .panel h3 { margin: 0 0 8px; font-size: 14px; }
+  .feed { max-height: 460px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .step { border-radius: 8px; padding: 6px 9px; background: var(--panel-2); font-size: 13px; animation: in 0.25s ease-out; }
+  .step.note { border-left: 3px solid var(--accent); }
+  .step.tool { border-left: 3px solid var(--line); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .step.tool.hl { border-left-color: var(--warn); }
+  .step .ev { color: var(--muted); }
+  .step .err { color: var(--bad); }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .cause { display: grid; grid-template-columns: 26px 1fr; gap: 4px 8px; padding: 8px; border-radius: 8px; background: var(--panel-2); margin-bottom: 6px; animation: in 0.3s ease-out; }
+  .cause .rank { font-weight: 700; color: var(--muted); }
+  .cause .svc { font-weight: 600; }
+  .cause .conf { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 3px 0; }
+  .cause .conf div { height: 100%; background: var(--accent); }
+  .cause .why { font-size: 13px; }
+  .cause .check { font-size: 12px; }
+  .cause .check.ok { color: var(--ok); } .cause .check.bad { color: var(--bad); }
+  .cite { font-size: 11px; padding: 1px 6px; margin-right: 4px; border-radius: 4px; border: 1px solid var(--line); cursor: pointer; font-family: ui-monospace, monospace; }
+  .cause.truth { outline: 2px solid var(--ok); }
+  .reveal { margin-top: 10px; font-size: 13px; }
+  .reveal .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .ci { color: var(--muted); font-size: 11px; }
+  .best { font-weight: 700; }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { max-height: 260px; } .columns { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Incident Investigator</h1>
+  <span class="tag">Muse Spark investigates outages and names the root cause, with evidence it checked</span>
+  <nav>
+    <button data-view="replay" class="active">Replay</button>
+    <button data-view="results">Results</button>
+  </nav>
+</header>
+
+<main id="replay-view">
+  <aside>
+    <select id="suite">
+      <option value="RE1">RE1 · metrics</option>
+      <option value="RE2">RE2 · metrics, logs, traces</option>
+      <option value="RE3">RE3 · code-level faults</option>
+    </select>
+    <div class="filters" id="system-filters"></div>
+    <div id="cases"></div>
+  </aside>
+  <section class="view">
+    <div id="empty" class="empty">Pick an outage on the left to replay it.</div>
+    <div id="stage" hidden>
+      <div class="bar">
+        <h2 id="title"></h2>
+        <span id="sources"></span>
+        <button class="btn primary" id="play">▶ Replay</button>
+        <select id="speed" class="btn"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select>
+        <button class="btn" id="reveal" disabled>Reveal the answer</button>
+        <span class="muted" id="clock"></span>
+      </div>
+      <div class="charts" id="charts"></div>
+      <div class="columns">
+        <div class="panel"><h3>Investigation</h3><div class="feed" id="feed"></div></div>
+        <div class="panel"><h3>Ranked root causes</h3><div id="causes"><div class="muted">Waiting for the alarm…</div></div>
+          <div class="reveal" id="reveal-box" hidden></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<main id="results-view" hidden style="grid-template-columns: 1fr;">
+  <section class="view" id="results"></section>
+</main>
+
+<script>
+"use strict";
+// Everything model-written is inserted with textContent, never innerHTML: this page is public.
+const $ = (sel) => document.querySelector(sel);
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmt = (x, d = 3) => (x === null || x === undefined) ? "–" : Number(x).toFixed(d);
+const RANKER_LABEL = {
+  "baro": "BARO (published)", "nsigma": "N-Sigma (published)", "mmbaro": "Multi-source BARO (published)",
+  "no-ai": "No-AI control", "spark-one-shot": "Spark one-shot", "spark-agent": "Spark agent (metrics)",
+  "spark-agent-all": "Spark agent (metrics + logs + traces)", "open-one-shot": "Spark Open one-shot",
+  "open-agent": "Spark Open agent (metrics)", "open-agent-all": "Spark Open agent (metrics + logs + traces)",
+};
+const TOOL_ICON = { top_deviations: "📊", compare_to_baseline: "📏", get_metric_window: "📈",
+                    get_logs: "📜", get_trace_errors: "🧵", get_dependencies: "🕸️", submit_ranking: "✅" };
+
+let index = null, bundle = null, charts = [], timers = [], systemFilter = null;
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  return r.json();
+}
+
+// ---- library -------------------------------------------------------------
+async function loadSuite(suite) {
+  index = await api(`/api/replays?suite=${suite}`);
+  const systems = [...new Set(index.cases.map(c => c.system))].sort();
+  const filters = $("#system-filters");
+  filters.replaceChildren();
+  systemFilter = null;
+  const names = { OB: "Online Boutique", SS: "Sock Shop", TT: "Train Ticket" };
+  for (const s of [null, ...systems]) {
+    const chip = el("span", "chip" + (s === null ? " on" : ""), s === null ? "All" : names[s] || s);
+    chip.onclick = () => { systemFilter = s; [...filters.children].forEach(c => c.classList.remove("on")); chip.classList.add("on"); renderCases(); };
+    filters.append(chip);
+  }
+  renderCases();
+}
+
+function renderCases() {
+  const list = $("#cases");
+  list.replaceChildren();
+  const names = { OB: "Online Boutique", SS: "Sock Shop", TT: "Train Ticket" };
+  index.cases.filter(c => !systemFilter || c.system === systemFilter).forEach((c, i) => {
+    const item = el("div", "case");
+    item.append(el("div", null, `Outage ${i + 1} · ${names[c.system] || c.system}`));
+    item.append(el("div", "meta", `${c.tool_calls} tool calls · ${c.turns ?? "–"} turns · ${c.case_id}`));
+    item.onclick = () => { [...list.children].forEach(n => n.classList.remove("selected")); item.classList.add("selected"); openCase(c.case_id); };
+    list.append(item);
+  });
+}
+
+// ---- one outage ----------------------------------------------------------
+function stop() { timers.forEach(clearTimeout); timers = []; }
+
+async function openCase(caseId) {
+  stop();
+  bundle = await api(`/api/replays/${index.suite}/${caseId}`);
+  $("#empty").hidden = true; $("#stage").hidden = false;
+  $("#title").textContent = `${bundle.system_name} · ${caseId}`;
+  const src = $("#sources"); src.replaceChildren();
+  bundle.sources.forEach(s => src.append(el("span", "badge", s)));
+  $("#feed").replaceChildren();
+  $("#causes").replaceChildren(el("div", "muted", "Waiting for the alarm…"));
+  $("#reveal-box").hidden = true; $("#reveal").disabled = true;
+  drawCharts(0);
+  $("#clock").textContent = "";
+}
+
+const shadeWindow = {
+  id: "shadeWindow",
+  beforeDatasetsDraw(chart) {
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    const x0 = x.getPixelForValue(0);
+    if (x0 > a.right) return;
+    ctx.save(); ctx.fillStyle = css("--window");
+    ctx.fillRect(Math.max(x0, a.left), a.top, a.right - Math.max(x0, a.left), a.bottom - a.top);
+    ctx.strokeStyle = css("--bad"); ctx.setLineDash([4, 3]); ctx.beginPath();
+    ctx.moveTo(x0, a.top); ctx.lineTo(x0, a.bottom); ctx.stroke(); ctx.restore();
+  },
+};
+
+function drawCharts(playhead) {
+  charts.forEach(c => c.destroy()); charts = [];
+  const grid = $("#charts"); grid.replaceChildren();
+  const { baseline_s, window_s } = bundle.window;
+  for (const s of bundle.series) {
+    const box = el("div", "chart");
+    box.append(el("div", "title", s.metric));
+    const canvas = el("canvas"); box.append(canvas); grid.append(box);
+    const pts = s.points.filter(p => p[0] <= playhead).map(p => ({ x: p[0], y: p[1] }));
+    charts.push(new Chart(canvas, {
+      type: "line",
+      data: { datasets: [{ data: pts, borderColor: css("--accent"), borderWidth: 1.5, pointRadius: 0, tension: 0.15 }] },
+      options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                 scales: { x: { type: "linear", min: -baseline_s, max: window_s, ticks: { color: css("--muted"), maxTicksLimit: 5, callback: v => `${v}s` }, grid: { color: css("--line") } },
+                           y: { ticks: { color: css("--muted"), maxTicksLimit: 4 }, grid: { color: css("--line") } } } },
+      plugins: [shadeWindow],
+    }));
+  }
+}
+
+function play() {
+  if (!bundle) return;
+  stop();
+  const speed = Number($("#speed").value);
+  const { baseline_s, window_s } = bundle.window;
+  $("#feed").replaceChildren();
+  $("#causes").replaceChildren(el("div", "muted", "Waiting for the alarm…"));
+  $("#reveal-box").hidden = true; $("#reveal").disabled = true;
+  // 1) telemetry streams in, the alarm fires at 0, the window keeps filling
+  const frames = 40, span = baseline_s + window_s, frameMs = 4000 / speed / frames;
+  for (let f = 0; f <= frames; f++) {
+    timers.push(setTimeout(() => {
+      const t = -baseline_s + span * f / frames;
+      charts.forEach((c, i) => { c.data.datasets[0].data = bundle.series[i].points.filter(p => p[0] <= t).map(p => ({ x: p[0], y: p[1] })); c.update("none"); });
+      $("#clock").textContent = t < 0 ? `t = ${Math.round(t)} s` : `🚨 alarm · t = +${Math.round(t)} s`;
+    }, f * frameMs));
+  }
+  // 2) the investigation, one step at a time
+  const start = frames * frameMs + 300;
+  const stepMs = 900 / speed;
+  const steps = bundle.trail.filter(s => s.type !== "submit");
+  steps.forEach((s, i) => timers.push(setTimeout(() => addStep(s), start + i * stepMs)));
+  // 3) the ranked causes
+  timers.push(setTimeout(showCauses, start + steps.length * stepMs + 400));
+}
+
+function addStep(s) {
+  const feed = $("#feed");
+  if (s.type === "note") {
+    feed.append(el("div", "step note", s.text));
+  } else if (s.type === "tool") {
+    const node = el("div", "step tool");
+    node.dataset.callId = s.call_id;
+    const args = Object.entries(s.args || {}).map(([k, v]) => `${k}=${v}`).join(", ");
+    node.append(el("div", null, `${TOOL_ICON[s.name] || "🔧"} ${s.call_id} ${s.name}(${args})`));
+    if (s.error) node.append(el("div", "err", s.error));
+    const top = (s.evidence || [])[0];
+    if (top) node.append(el("div", "ev", `strongest: ${top.service} · ${top.signal} · score ${top.score}`));
+    feed.append(node);
+  }
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function showCauses() {
+  const box = $("#causes"); box.replaceChildren();
+  if (bundle.error || !bundle.causes.length) {
+    box.append(el("div", "err", bundle.error || "No ranking was submitted.")); $("#reveal").disabled = false; return;
+  }
+  bundle.causes.forEach((c, i) => {
+    const card = el("div", "cause"); card.dataset.service = c.service;
+    card.append(el("div", "rank", `#${i + 1}`));
+    const body = el("div");
+    body.append(el("div", "svc", c.service));
+    if (typeof c.confidence === "number") {
+      const bar = el("div", "conf"); const fill = el("div"); fill.style.width = `${Math.round(c.confidence * 100)}%`; bar.append(fill);
+      body.append(bar, el("div", "muted", `confidence ${Math.round(c.confidence * 100)}% · ${c.indicator}`));
+    }
+    body.append(el("div", "why", c.reasoning));
+    if (c.verified !== undefined) body.append(el("div", "check " + (c.verified ? "ok" : "bad"), (c.verified ? "✓ evidence checks out: " : "✗ rejected: ") + c.verification));
+    const cites = el("div");
+    (c.evidence || []).forEach(id => {
+      const chip = el("span", "cite", id);
+      chip.onmouseenter = () => document.querySelectorAll(`.step.tool[data-call-id="${CSS.escape(id)}"]`).forEach(n => { n.classList.add("hl"); n.scrollIntoView({ block: "nearest" }); });
+      chip.onmouseleave = () => document.querySelectorAll(".step.tool.hl").forEach(n => n.classList.remove("hl"));
+      cites.append(chip);
+    });
+    body.append(cites);
+    card.append(body); box.append(card);
+  });
+  $("#reveal").disabled = false;
+}
+
+async function reveal() {
+  const full = await api(`/api/replays/${bundle.suite}/${bundle.case_id}?reveal=true`);
+  const truth = full.answer.service.replace("-db", "");
+  document.querySelectorAll(".cause").forEach(card => { if ((card.dataset.service || "").replace("-db", "") === truth) card.classList.add("truth"); });
+  const box = $("#reveal-box"); box.replaceChildren(); box.hidden = false;
+  const rank = (list) => { const i = (list || []).map(s => s.replace("-db", "")).indexOf(truth); return i < 0 ? "not in top 5" : `#${i + 1}`; };
+  const agentRank = rank(bundle.causes.filter(c => c.verified !== false).map(c => c.service));
+  const rows = [["Benchmark's known root cause", `${full.answer.service} (${full.answer.fault} fault)`],
+                ["Where Spark ranked it", agentRank],
+                ["N-Sigma (best published method) ranked it", rank(full.others.nsigma)],
+                ["No-AI control ranked it", rank(full.others["no-ai"])]];
+  rows.forEach(([k, v]) => { const r = el("div", "row"); r.append(el("span", null, k), el("strong", null, v)); box.append(r); });
+}
+
+// ---- results -------------------------------------------------------------
+async function renderResults() {
+  const root = $("#results"); root.replaceChildren();
+  for (const suite of ["RE1", "RE2", "RE3"]) {
+    const data = await api(`/api/results?suite=${suite}`);
+    const panel = el("div", "panel"); panel.style.marginBottom = "14px";
+    panel.append(el("h3", null, `${suite} · ${data.rankers[0]?.cases ?? "–"} held-out test outages · anchored at the fault time`));
+    const table = el("table"); const head = el("tr");
+    ["Ranker", "Top-1 accuracy", "Top-3 accuracy", "Avg@5", "Failed", "Model"].forEach(h => head.append(el("th", null, h)));
+    table.append(head);
+    const best = Math.max(...data.rankers.map(r => r.ac1));
+    data.rankers.sort((a, b) => a.ac1 - b.ac1).forEach(r => {
+      const tr = el("tr");
+      tr.append(el("td", r.ac1 === best ? "best" : null, RANKER_LABEL[r.ranker] || r.ranker));
+      for (const [k, ci] of [["ac1", "ac1"], ["ac3", "ac3"], ["avg5", "avg5"]]) {
+        const td = el("td", "num"); td.append(el("span", r.ac1 === best && k === "ac1" ? "best" : null, fmt(r[k])));
+        if (r.ci95 && r.ci95[ci]) td.append(el("span", "ci", ` [${fmt(r.ci95[ci][0])}, ${fmt(r.ci95[ci][1])}]`));
+        tr.append(td);
+      }
+      tr.append(el("td", "num", r.failed), el("td", "muted", r.model || "–"));
+      table.append(tr);
+    });
+    panel.append(table); root.append(panel);
+  }
+  const det = await api("/api/detection");
+  const panel = el("div", "panel");
+  panel.append(el("h3", null, "Detection · 28 SMD servers · event-level scoring"));
+  const table = el("table"); const head = el("tr");
+  ["Detector", "Precision", "Recall", "F1", "Mean delay (rows)"].forEach(h => head.append(el("th", null, h)));
+  table.append(head);
+  det.forEach(d => {
+    const tr = el("tr");
+    tr.append(el("td", null, d.detector), el("td", "num", fmt(d.precision)), el("td", "num", fmt(d.recall)));
+    const f1 = el("td", "num", fmt(d.f1)); if (d.f1_ci) f1.append(el("span", "ci", ` [${fmt(d.f1_ci[0])}, ${fmt(d.f1_ci[1])}]`));
+    tr.append(f1, el("td", "num", fmt(d.mean_delay, 1))); table.append(tr);
+  });
+  panel.append(table); root.append(panel);
+}
+
+// ---- wiring --------------------------------------------------------------
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  $("#replay-view").hidden = b.dataset.view !== "replay";
+  $("#results-view").hidden = b.dataset.view !== "results";
+  if (b.dataset.view === "results") renderResults();
+});
+$("#suite").onchange = (e) => loadSuite(e.target.value);
+$("#play").onclick = play;
+$("#reveal").onclick = reveal;
+loadSuite("RE1");
+</script>
+</body>
+</html>
