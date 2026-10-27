@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Epicenter</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect x=%274%27 y=%274%27 width=%278%27 height=%278%27 fill=%27%23e5531a%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
@@ -108,6 +109,11 @@ nav button.theme { width: 48px; padding: 0; }
 .log .line.hl { background: var(--sunken); }
 .log .ev { color: var(--ink-3); }
 .empty { padding: 28px 18px; color: var(--ink-3); font-size: 13px; }
+.log:empty::before { content: attr(data-empty); display: block; padding: 10px 18px 16px; color: var(--ink-3); font-size: 12px; }
+.hint { display: none; margin: 0; font-size: 12px; color: var(--ink-3); }
+table.verdict:empty + .hint { display: block; }
+.intro { font-size: 13px; color: var(--ink-2); margin: 0 0 16px; }
+.intro a { color: var(--ink); }
 
 /* verdict */
 .verdict { width: 100%; border-collapse: collapse; }
@@ -164,7 +170,7 @@ nav button.theme { width: 48px; padding: 0; }
 
 /* library */
 .lib-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--rule); }
-.lib-tabs button { background: none; border: 0; border-right: 1px solid var(--rule); padding: 10px 0; cursor: pointer;
+.lib-tabs button { background: none; border: 0; border-right: 1px solid var(--rule); padding: 10px 6px; line-height: 1.3; cursor: pointer;
                    font: 600 11px/1 var(--cond); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
 .lib-tabs button:last-child { border-right: 0; }
 .lib-tabs button[aria-pressed="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
@@ -216,8 +222,13 @@ nav button.theme { width: 48px; padding: 0; }
   .etable th { overflow-wrap: normal; }
 }
 
+/* three columns: the log-and-verdict column scrolls on its own, so the list and the chart stay put */
+@media (min-width: 1101px) {
+  #view-live .frame > .col:last-child, #view-replay .frame > .col:last-child { max-height: calc(100vh - 48px); overflow-y: auto; }
+}
 @media (max-width: 1100px) {
   .frame { grid-template-columns: 1fr; }
+  #view-replay .col.scroll { max-height: 48vh !important; }   /* keep the player within reach below the list */
   .col { border-right: 0; border-bottom: 1px solid var(--rule); }
   .statusline { display: none; }
   .mast { grid-template-columns: auto 1fr; }
@@ -243,6 +254,7 @@ nav button.theme { width: 48px; padding: 0; }
   <div class="frame">
     <div class="col">
       <div class="block">
+        <p class="intro">Epicenter detects outages and sends a Meta Muse agent to find which service caused them. Break one below and watch it investigate, or open <a href="#replay">Replay</a> to watch any of 468 recorded investigations.</p>
         <h3 class="label">Break something</h3>
         <div class="label" style="margin:12px 0 6px">1 · Service</div>
         <div class="picker" id="target-picker"></div>
@@ -267,8 +279,8 @@ nav button.theme { width: 48px; padding: 0; }
     </div>
     <div class="col">
       <div class="block"><h3 class="label">Flight log</h3></div>
-      <div class="log scroll" id="live-log" aria-live="polite" style="max-height:46vh"></div>
-      <div class="block"><h3 class="label">Verdict</h3><table class="verdict" id="live-verdict"></table>
+      <div class="log scroll" id="live-log" aria-live="polite" style="max-height:46vh" data-empty="Waiting for an outage. Break a service on the left, or watch the next one in the queue: every tool call the agent makes appears here."></div>
+      <div class="block"><h3 class="label">Verdict</h3><table class="verdict" id="live-verdict"></table><p class="hint">The ranked causes appear here once the agent finishes.</p>
         <div id="live-feedback" class="row-btns" hidden>
           <button class="btn" data-vote="up">Useful</button><button class="btn" data-vote="down">Not useful</button>
           <span class="mono" id="fb-msg" role="status"></span>
@@ -298,7 +310,7 @@ nav button.theme { width: 48px; padding: 0; }
         <span class="label" id="replay-title">No outage selected</span>
         <span style="flex:1"></span>
         <select class="btn" id="speed" aria-label="playback speed"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select>
-        <button class="btn solid" id="play-btn" disabled>Replay</button>
+        <button class="btn solid" id="play-btn" disabled>Play investigation</button>
         <button class="btn" id="table-btn" disabled>Table</button>
       </div>
       <div class="strips" id="replay-strips"></div>
@@ -307,9 +319,10 @@ nav button.theme { width: 48px; padding: 0; }
     </div>
     <div class="col">
       <div class="block"><h3 class="label">Flight log</h3></div>
-      <div class="log scroll" id="replay-log" style="max-height:46vh"></div>
-      <div class="block"><h3 class="label">Verdict</h3><table class="verdict" id="replay-verdict"></table>
-        <button class="btn" id="reveal-btn" disabled style="margin-top:12px">Reveal the answer</button></div>
+      <div class="log scroll" id="replay-log" style="max-height:46vh" data-empty="Pick an outage, then press Play investigation to watch the agent's tool calls in order."></div>
+      <div class="block"><h3 class="label">Verdict</h3><table class="verdict" id="replay-verdict"></table><p class="hint">The agent's five ranked causes appear here at the end of the playback.</p>
+        <button class="btn" id="reveal-btn" disabled style="margin-top:12px" title="Play the investigation first">Reveal the answer</button>
+        <p class="note-sm" id="reveal-note">Play the investigation to unlock the known answer.</p></div>
       <div class="reveal-box" id="reveal-box" hidden></div>
     </div>
   </div>
@@ -392,13 +405,16 @@ $("#theme").onclick = () => {
 try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 
 /* ---- views ---------------------------------------------------------------- */
-document.querySelectorAll("nav button[data-view]").forEach((b) => b.onclick = () => show(b.dataset.view));
-function show(view) {
+/* Every navigation goes through the URL, so Back, refresh and shared links all land where you were. */
+function go(hash) { if (location.hash.slice(1) !== hash) location.hash = hash; else route(); }
+const narrow = () => matchMedia("(max-width: 1100px)").matches;
+document.querySelectorAll("nav button[data-view]").forEach((b) => b.onclick = () => go(b.dataset.view));
+function show(view, autoload = true) {
   document.querySelectorAll("nav button[data-view]").forEach((b) => b.toggleAttribute("aria-current", b.dataset.view === view));
   document.querySelectorAll("nav button[data-view][aria-current]").forEach((b) => b.setAttribute("aria-current", "page"));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("on", v.id === `view-${view}`));
   if (view === "evidence" && !$("#evidence-body").childElementCount) renderEvidence();
-  if (view === "replay" && !replay.index) loadSuite("RE1");
+  if (view === "replay" && autoload && !replay.index) loadSuite("RE1");
   redrawAll();
 }
 
@@ -453,10 +469,12 @@ function drawSet(set) {
   ctx.fillStyle = tok("--ink-3"); ctx.font = `400 10px ${tok("--mono")}`; ctx.textBaseline = "middle";
   const span = t1 - t0, step = span > 1200 ? 300 : span > 600 ? 120 : span > 240 ? 60 : 30;
   const alarmPx = m.alarm != null ? (m.alarm - t0) / span * w : null;
+  let lastLabel = -Infinity;
   for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) {
     const px = (t - t0) / span * w; ctx.fillRect(Math.round(px), 0, 1, 4);
-    if (px > w - 44 || (alarmPx != null && Math.abs(px - alarmPx) < 48)) continue;   // keep labels apart
+    if (px > w - 44 || px - lastLabel < 46 || (alarmPx != null && Math.abs(px - alarmPx) < 48)) continue;   // keep labels apart
     const lab = set.marks?.clock ? set.marks.clock(t) : fmtT(t); ctx.fillText(lab, Math.max(px - 12, 2), 13);
+    lastLabel = px;
   }
   if (alarmPx != null && alarmPx >= 0) { ctx.fillStyle = tok("--signal"); ctx.font = `600 10px ${tok("--cond")}`; ctx.fillText("ALARM", Math.min(alarmPx + 4, w - 40), 13); }
 }
@@ -530,7 +548,7 @@ function stopReplay() { replay.timers.forEach(clearTimeout); replay.timers = [];
 
 const tabs = $("#suite-tabs");
 [["RE1", "RE1 metrics"], ["RE2", "RE2 multi-source"], ["RE3", "RE3 code faults"]].forEach(([s, label]) => {
-  const b = el("button", null, label); b.dataset.suite = s; b.onclick = () => loadSuite(s); tabs.append(b);
+  const b = el("button", null, label); b.dataset.suite = s; b.onclick = () => go(`replay/${s}`); tabs.append(b);
 });
 async function loadSuite(suite) {
   tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.suite === suite)));
@@ -538,6 +556,7 @@ async function loadSuite(suite) {
   const f = $("#system-filter"); f.replaceChildren();
   [null, ...new Set(replay.index.cases.map((c) => c.system))].forEach((s) => {
     const b = el("button", null, s || "ALL"); b.setAttribute("aria-pressed", String(s === null));
+    b.title = s ? SYSTEM[s] || s : "All systems"; b.setAttribute("aria-label", b.title);
     b.onclick = () => { replay.system = s; f.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); renderCaseList(); };
     f.append(b);
   });
@@ -546,10 +565,11 @@ async function loadSuite(suite) {
 function renderCaseList() {
   const list = $("#case-list"); list.replaceChildren();
   replay.index.cases.filter((c) => !replay.system || c.system === replay.system).forEach((c, i) => {
-    const row = el("div", "case"); row.setAttribute("role", "option"); row.tabIndex = 0;
+    const row = el("div", "case"); row.setAttribute("role", "option"); row.tabIndex = 0; row.dataset.case = c.case_id;
+    row.setAttribute("aria-selected", String(replay.bundle?.case_id === c.case_id));
     row.append(el("span", "n", String(i + 1).padStart(3, "0")), el("span", "s", SYSTEM[c.system] || c.system),
                el("span", "m", `${c.tool_calls} tool calls · ${c.turns ?? "–"} turns · ${c.case_id}`));
-    const open = () => { list.querySelectorAll(".case").forEach((x) => x.setAttribute("aria-selected", "false")); row.setAttribute("aria-selected", "true"); openCase(c.case_id); };
+    const open = () => go(`replay/${replay.index.suite}/${c.case_id}`);
     row.onclick = open; row.onkeydown = (e) => { if (e.key === "Enter") open(); };
     list.append(row);
   });
@@ -558,16 +578,21 @@ async function openCase(caseId) {
   stopReplay();
   const b = replay.bundle = await api(`/api/replays/${replay.index.suite}/${caseId}`);
   $("#replay-empty").hidden = true; $("#play-btn").disabled = false; $("#table-btn").disabled = false; $("#reveal-btn").disabled = true;
+  $("#table-btn").textContent = "Table"; $("#reveal-note").hidden = false;
+  document.querySelectorAll("#case-list .case").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.case === caseId)));
+  document.querySelector(`#case-list .case[data-case="${CSS.escape(caseId)}"]`)?.scrollIntoView({ block: "nearest" });
   $("#replay-title").textContent = `${b.system_name} · ${caseId} · ${b.sources.join(" · ")}`;
   $("#replay-log").replaceChildren(); renderVerdict("replay-verdict", []); $("#replay-verdict").replaceChildren();
   $("#reveal-box").hidden = true; $("#replay-table").hidden = true; $("#replay-strips").hidden = false;
   renderRail("replay-rail", "baseline", {}, () => "", REPLAY_PHASES);
   mountStrips("replay-strips", b.series, [-b.window.baseline_s, b.window.window_s], { alarm: 0, playhead: b.window.window_s });
+  if (narrow()) $("#replay-rail").scrollIntoView({ behavior: "smooth", block: "start" });   // one column: show the player
 }
 $("#play-btn").onclick = () => {
   const b = replay.bundle; if (!b) return; stopReplay();
   const speed = Number($("#speed").value), set = stripSets["replay-strips"];
   $("#replay-log").replaceChildren(); $("#replay-verdict").replaceChildren(); $("#reveal-box").hidden = true; $("#reveal-btn").disabled = true;
+  $("#reveal-note").hidden = false;
   const frames = 60, span = b.window.baseline_s + b.window.window_s, frameMs = 5000 / speed / frames;
   set.marks = { playhead: -b.window.baseline_s };
   renderRail("replay-rail", "baseline", {}, () => "", REPLAY_PHASES);
@@ -580,11 +605,12 @@ $("#play-btn").onclick = () => {
   const start = frames * frameMs + 300, stepMs = 950 / speed, steps = b.trail.filter((s) => s.type !== "submit");
   replay.timers.push(setTimeout(() => renderRail("replay-rail", "investigating", {}, () => "", REPLAY_PHASES), start));
   steps.forEach((s, i) => replay.timers.push(setTimeout(() => logStep("replay-log", s, "#" + String(i + 1).padStart(2, "0")), start + i * stepMs)));
-  replay.timers.push(setTimeout(() => { renderVerdict("replay-verdict", b.causes, b.error); renderRail("replay-rail", "diagnosed", {}, () => "", REPLAY_PHASES); $("#reveal-btn").disabled = false; }, start + steps.length * stepMs + 300));
+  replay.timers.push(setTimeout(() => { renderVerdict("replay-verdict", b.causes, b.error); renderRail("replay-rail", "diagnosed", {}, () => "", REPLAY_PHASES); $("#reveal-btn").disabled = false; $("#reveal-note").hidden = true; }, start + steps.length * stepMs + 300));
 };
 $("#table-btn").onclick = () => {
   const b = replay.bundle, box = $("#replay-table"), open = box.hidden;
-  box.hidden = !open; $("#replay-strips").hidden = open; if (!open) return redrawAll();
+  box.hidden = !open; $("#replay-strips").hidden = open; $("#table-btn").textContent = open ? "Chart" : "Table";
+  if (!open) return redrawAll();
   const t = el("table", "etable"); t.style.margin = "0";
   const head = el("tr"); ["metric", "service", "baseline mean", "window mean", "window max"].forEach((h) => head.append(el("th", null, h))); t.append(head);
   for (const s of b.series) {
@@ -603,6 +629,7 @@ $("#reveal-btn").onclick = async () => {
   [["Known root cause", `${full.answer.service} · ${full.answer.fault}`], ["Spark ranked it", rank(b.causes.filter((c) => c.verified !== false).map((c) => c.service))],
    ["N-Sigma ranked it", rank(full.others.nsigma)], ["No-AI control ranked it", rank(full.others["no-ai"])]]
     .forEach(([k, v]) => { const r = el("div", "row"); r.append(el("span", null, k), el("b", null, v)); box.append(r); });
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 };
 
 /* ---- evidence --------------------------------------------------------------- */
@@ -779,7 +806,8 @@ $("#break-btn").onclick = async () => {
   const model = document.querySelector("input[name=model]:checked")?.value || "spark-open";
   const msg = $("#break-msg"); msg.textContent = "";
   try { const r = await api("/api/live/break", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ service, fault, model }) });
-        msg.textContent = `queued · position ${r.position}`; }
+        msg.textContent = `queued · position ${r.position}`;
+        if (narrow()) $("#live-log").previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" }); }
   catch (e) { msg.textContent = String(e.message); }
 };
 document.querySelectorAll("#live-feedback [data-vote]").forEach((b) => b.onclick = async () => {
@@ -842,9 +870,12 @@ async function route() {
   const [view, suite, caseId, action] = location.hash.slice(1).split("/");
   if (view === "study" && suite && /^[A-Za-z0-9-]{2,16}$/.test(caseId || "")) return startStudy(suite, caseId);
   if (view === "replay" && suite) {
-    show("replay"); await loadSuite(suite);
-    if (caseId) { await openCase(caseId); if (action === "play") $("#play-btn").click(); }
+    show("replay", false);
+    if (replay.index?.suite !== suite) await loadSuite(suite);
+    if (caseId && replay.bundle?.case_id !== caseId) await openCase(caseId);
+    if (caseId && action === "play") $("#play-btn").click();
   } else if (["live", "replay", "evidence"].includes(view)) show(view);
+  else show("live");
 }
 addEventListener("hashchange", route);
 initLive().then(route);
