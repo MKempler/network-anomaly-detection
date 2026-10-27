@@ -25,11 +25,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from run_explain import to_results  # noqa: E402
 
 ORDER = ["baro", "nsigma", "mmbaro", "no-ai", "spark-one-shot", "spark-agent", "spark-agent-all",
-         "open-one-shot", "open-agent", "open-agent-all"]
+         "open-one-shot", "open-agent", "open-agent-all", "glimmer-agent-all", "glimmer-tuned-agent-all"]
 LABELS = {"baro": "BARO (published)", "nsigma": "N-Sigma (published)", "mmbaro": "Multi-source BARO (published)",
           "no-ai": "No-AI control", "spark-one-shot": "Spark one-shot", "spark-agent": "Spark agent (metrics)",
           "spark-agent-all": "Spark agent (metrics + logs + traces)", "open-one-shot": "Spark Open one-shot",
-          "open-agent": "Spark Open agent (metrics)", "open-agent-all": "Spark Open agent (metrics + logs + traces)"}
+          "open-agent": "Spark Open agent (metrics)", "open-agent-all": "Spark Open agent (metrics + logs + traces)",
+          "glimmer-agent-all": "Glimmer 30B agent (all sources)",
+          "glimmer-tuned-agent-all": "Glimmer 30B fine-tuned agent (all sources)"}
 
 
 def main():
