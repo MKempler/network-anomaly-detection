@@ -1,6 +1,6 @@
 # Epicenter
 
-**Epicenter detects when a microservice system departs from normal, then sends a Meta Muse agent to investigate.** The agent queries metrics, logs, traces and the call graph, and returns five ranked root causes. A deterministic verifier checks the evidence behind every cause, and the agent drafts the internal ticket note and the customer update, citing that evidence sentence by sentence.
+**Epicenter watches server and service telemetry, detects when it departs from normal, and sends a Meta Muse agent to find which component caused it.** The agent queries metrics, logs, traces and the call graph, and returns five ranked root causes. A deterministic verifier checks the evidence behind every cause, and the agent drafts the internal ticket note and the customer update, citing that evidence sentence by sentence.
 
 It is measured on 468 held-out outages from the [RCAEval](https://github.com/phamquiluan/RCAEval) benchmark against published methods re-run on the same cases, and it can be watched live: break a service in a running microservice shop and see the alarm, the investigation and the verdict as they happen.
 
@@ -65,7 +65,7 @@ Every service is measured from its callers' spans as well as its own, the way a 
 
 ## Open weights: fine-tuning Muse Glimmer
 
-Glimmer 30B is Meta's open-weight model, small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls. Out of the box it often loses the thread of the investigation: on 140 of the 468 test outages it never submitted a ranking within its 10 turns, or submitted one that didn't parse. When it does answer, its confident answers are mostly right.
+Glimmer 30B is Meta's open-weight model, small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls. Out of the box it often loses the thread of the investigation: on 140 of the 468 test outages it never submitted a ranking within its budget (10 investigation turns, then a final turn offering only `submit_ranking`), or submitted one that didn't parse. When it does answer, its confident answers are mostly right.
 
 So it was taught by the hosted agent ([`scripts/finetune/`](scripts/finetune)):
 
@@ -78,7 +78,7 @@ So it was taught by the hosted agent ([`scripts/finetune/`](scripts/finetune)):
 | AC@1 · RE1 / RE2 / RE3 | 0.653 / 0.586 / 0.580 | **0.911 / 0.944 / 0.815** |
 | AC@3 · RE1 / RE2 / RE3 | 0.751 / 0.605 / 0.642 | **0.987 / 0.988 / 0.951** |
 | Runs that failed to submit a ranking | 140 of 468 | **1 of 468** |
-| Median turns per investigation | 11 | **6** |
+| Median turns per investigation (budget: 10 + 1 final) | 11 | **6** |
 | Median seconds per investigation | 126 | **80** |
 
 Against hosted Spark, the tuned model is level on RE2 (0.944 vs 0.963, p = 0.55) and behind on first place for RE1 (0.911 vs 0.951, p = 0.035) and RE3 (0.815 vs 0.975, p < 0.001). Its top-3 accuracy is not significantly different on any suite. The whole fine-tune, from downloading the weights to both test-split evaluations, used about $13 of Modal credit.
@@ -100,7 +100,7 @@ Against hosted Spark, the tuned model is level on RE2 (0.944 vs 0.963, p = 0.55)
 <details>
 <summary><b>Full tables: every method on every suite</b></summary>
 
-AC@1, AC@3 and Avg@5 with 95% intervals; "Failed" counts runs that produced no valid ranking.
+AC@1, AC@3 and Avg@5 with 95% intervals; "Failed" counts runs that produced no valid ranking. "One prompt" sees only the top metric deviations, on every suite; the agents use the sources listed.
 
 **RE1** · 225 test outages · metrics
 
@@ -149,13 +149,15 @@ AC@1, AC@3 and Avg@5 with 95% intervals; "Failed" counts runs that produced no v
 | Glimmer 30B agent | 0.580 [0.481, 0.679] | 0.642 [0.547, 0.738] | 0.627 | 26 |
 | Glimmer 30B agent, fine-tuned | 0.815 [0.725, 0.899] | 0.951 [0.904, 0.988] | 0.916 | 1 |
 
+Multi-source BARO is run on RE2 only: it needs RCAEval's log and trace time series (`logts`, `tracets`), which RE3 doesn't ship.
+
 `python scripts/report_explain.py --suite RE2 --part test` prints these tables with every paired McNemar test.
 
 </details>
 
 **What each rung adds.** The ladder runs the same cases through one capability at a time:
 
-- **A language model over the raw ranking:** one prompt beats the no-AI control on every suite (p ≤ 2e-6).
+- **A language model over the raw ranking:** one prompt over the top metric deviations beats the no-AI control on every suite (p ≤ 2e-6).
 - **Investigation over one prompt:** it helps on RE1 (0.844 → 0.951, p = 3e-6) and RE3 (0.741 → 0.975, p = 4e-6). On RE2 a single prompt already scores 0.957; investigating with metrics alone is *worse* (0.901, p = 0.012), and logs and traces bring it back to 0.963 (p = 0.013 against metrics alone). The losses are network faults: with metrics alone the agent gets 0.67 of delay faults and 0.74 of packet-loss faults, and with logs and traces 0.81 and 1.00.
 - **Open weights over hosted:** Spark Open matches hosted Spark on RE2 and RE3 and trails it on RE1 with metrics only (0.893 vs 0.951, p = 0.004).
 
@@ -165,8 +167,8 @@ AC@1, AC@3 and Avg@5 with 95% intervals; "Failed" counts runs that produced no v
 |---|---:|---:|---:|
 | Outages the detector flagged | 202 of 225 | 148 of 162 | 29 of 81 |
 | N-Sigma (published), all outages | 0.578 | 0.691 | 0.235 |
-| Spark agent, all outages | 0.831 | 0.864 | 0.346 |
-| Spark agent, flagged outages only | 0.926 | 0.946 | 0.966 |
+| Muse Spark agent (hosted), all outages | 0.831 | 0.864 | 0.346 |
+| Muse Spark agent (hosted), flagged outages only | 0.926 | 0.946 | 0.966 |
 
 When the detector fires, the agent is about as accurate as when it is handed the fault time. Detection is the bottleneck, above all on RE3's code-level faults, which often leave little trace in the metrics the detector watches.
 
@@ -264,3 +266,7 @@ modal deploy scripts/finetune/modal_app.py               # vLLM: base and adapte
 - **Models:** Muse Spark through the Meta Model API, Muse Spark Open through Baseten, and Muse Glimmer 30B fine-tuned with Meta's post-training recipe and served with Meta's vLLM image on Modal.
 
 Only public data is used anywhere in this repository.
+
+## License
+
+The code is under the [MIT License](LICENSE). The datasets and Online Boutique keep their own licenses.
