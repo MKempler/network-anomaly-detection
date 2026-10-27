@@ -29,7 +29,7 @@ def first_case(client, suite="RE2"):
 def test_console_and_health(client):
     assert client.get("/api/health").json() == {"ok": True}
     page = client.get("/")
-    assert page.status_code == 200 and "Incident Investigator" in page.text
+    assert page.status_code == 200 and "Epicenter" in page.text
 
 
 def test_replay_hides_the_answer_until_reveal(client):

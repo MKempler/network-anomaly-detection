@@ -88,7 +88,7 @@ def start_lab():
     return lab
 
 
-app = FastAPI(title="Incident investigator", lifespan=lifespan)
+app = FastAPI(title="Epicenter", lifespan=lifespan)
 
 
 def _row(obj) -> dict:
