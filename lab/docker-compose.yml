@@ -119,7 +119,7 @@ services:
     image: us-central1-docker.pkg.dev/google-samples/microservices-demo/cartservice:v0.10.5
     container_name: ob-cartservice
     labels: {lab.service: cartservice}
-    mem_limit: 128m
+    mem_limit: 256m   # official limit is 128Mi; the .NET runtime needs more under amd64 emulation
     environment: {REDIS_ADDR: "redis-cart:6379"}
 
   adservice:
@@ -149,6 +149,8 @@ services:
     <<: *ob
     image: otel/opentelemetry-collector-contrib:0.111.0
     container_name: ob-otel-collector
+    # The image runs as a non-root user that can't write to a fresh named volume.
+    user: "0:0"
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
       - ./otel-collector.yaml:/etc/otel/config.yaml:ro
