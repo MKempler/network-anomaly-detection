@@ -172,8 +172,10 @@ def test_incident_runs_end_to_end_and_is_recorded(tmp_path):
     assert inj.log == [("inject", "cartservice", "delay"), ("revert", "cartservice", "delay")]
     assert incident.verdict["top1"] is True and incident.verdict["detected"] is True
     assert lab.tally() == {"incidents": 1, "detected": 1, "investigated": 1, "top1": 1, "top3": 1}
-    record = (tmp_path / "incidents.jsonl").read_text()
-    assert "visitor" not in record and "1.2.3.4" not in record
+    raw = (tmp_path / "incidents.jsonl").read_text()
+    record = json.loads(raw)
+    assert "visitor" not in record and record["source"] == "visitor"        # the field, not the hash
+    assert Lab.visitor_id("1.2.3.4") not in raw and "1.2.3.4" not in raw
 
 
 def test_agent_is_never_told_the_injection_time(tmp_path):
@@ -265,3 +267,17 @@ def test_traced_services_are_not_duplicated():
     client["name"] = "hipstershop.ProductCatalogService/GetProduct"
     spans = parse_spans(otlp_line("frontend", [client]))
     assert [s["service"] for s in spans] == ["frontend"]
+
+
+def test_alert_incidents_investigate_without_injecting_and_skip_the_tally(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    drafted, notified = [], []
+    lab.handoff = lambda causes, trail: drafted.append(len(trail)) or {"internal_note": []}
+    lab.notify = notified.append
+    lab.telemetry.fault_at = lab.clock()                       # something is already wrong
+    incident = lab.submit_alert(lab.clock() + 5, [{"name": "HighLatency", "service": "frontend"}])
+    lab.run(lab.waiting.popleft())
+    assert inj.log == []                                        # nothing injected
+    assert "top1" not in incident.verdict and incident.verdict["investigated"] is True
+    assert drafted == [1] and notified[0]["source"] == "alertmanager"
+    assert lab.tally()["incidents"] == 0                       # alerts have no known answer

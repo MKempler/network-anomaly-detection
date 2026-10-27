@@ -44,6 +44,9 @@ class Incident:
     times: dict = field(default_factory=dict)      # phase -> unix time
     causes: list = field(default_factory=list)
     verdict: dict = field(default_factory=dict)
+    source: str = "visitor"                        # "visitor" (a fault on the menu) or "alertmanager"
+    trail: list = field(default_factory=list)      # the agent's steps, so live incidents can be replayed
+    handoff: dict = field(default_factory=dict)    # ticket note and customer update drafts
 
     def public(self) -> dict:
         d = asdict(self)
@@ -53,8 +56,9 @@ class Incident:
 
 class Lab:
     def __init__(self, telemetry, injector, investigate, cfg=None, records: Path = RECORDS,
-                 clock=time.time, sleep=time.sleep):
+                 clock=time.time, sleep=time.sleep, handoff=None, notify=None):
         self.telemetry, self.injector, self.investigate = telemetry, injector, investigate
+        self.handoff, self.notify = handoff, notify      # optional: draft writers and a notifier (Slack)
         self.cfg = cfg or DEFAULT.live
         self.records, self.clock, self.sleep = Path(records), clock, sleep
         self.waiting: deque[Incident] = deque()
@@ -83,6 +87,18 @@ class Lab:
             incident = Incident(uuid.uuid4().hex[:10], service, fault, visitor, times={"queued": now})
             self.waiting.append(incident)
             self.last_request[visitor] = now
+        self.publish({"type": "queue", "queue": self.queue_view()})
+        return incident
+
+    def submit_alert(self, start: float, alerts: list[dict]) -> Incident:
+        """Queue an investigation anchored at an external alert's start; nothing is injected."""
+        with self._lock:
+            if len(self.waiting) >= self.cfg.queue_max:
+                raise OverflowError("the queue is full")
+            names = ", ".join(sorted({a["name"] for a in alerts}))[:120]
+            incident = Incident(uuid.uuid4().hex[:10], "unknown", names, "alertmanager", source="alertmanager",
+                                times={"queued": self.clock(), "anomaly_start": start})
+            self.waiting.append(incident)
         self.publish({"type": "queue", "queue": self.queue_view()})
         return incident
 
@@ -131,6 +147,8 @@ class Lab:
         return self.investigations_today[1] < self.cfg.daily_investigations
 
     def run(self, incident: Incident):
+        if incident.source == "alertmanager":
+            return self._run_alert(incident)
         cfg = self.cfg
         self.current = incident
         self._phase(incident, "settling")
@@ -162,6 +180,20 @@ class Lab:
             self.current = None
             self._record(incident)
 
+    def _run_alert(self, incident: Incident):
+        """An external alert: wait for the evidence window after its start, then investigate."""
+        self.current = incident
+        start = incident.times["anomaly_start"]
+        try:
+            self._phase(incident, "alarm", detect_s=None)
+            while self.clock() < start + self.cfg.window_s:
+                self.sleep(1)
+            self._diagnose(incident, None, start)
+        finally:
+            self._phase(incident, "recovered")
+            self.current = None
+            self._record(incident)
+
     def _await_alarm(self, history, history_end) -> float | None:
         cfg = self.cfg
         deadline = history_end + cfg.alarm_timeout_s
@@ -177,7 +209,7 @@ class Lab:
                 return flag
         return None
 
-    def _diagnose(self, incident: Incident, history_end: float, alarm: float):
+    def _diagnose(self, incident: Incident, history_end: float | None, alarm: float):
         cfg = self.cfg
         if not self._budget_left():
             self._phase(incident, "diagnosed", note="daily investigation budget used up")
@@ -191,15 +223,31 @@ class Lab:
         inv = Investigation(case, alarm, inv_cfg, logs=lambda: logs, traces=lambda: spans)
         self._phase(incident, "investigating")
         started = self.clock()
-        run = self.investigate(inv, on_step=lambda step: self.publish({"type": "step", "id": incident.id,
-                                                                         "step": step}))
+
+        def on_step(step):
+            incident.trail.append(step)
+            self.publish({"type": "step", "id": incident.id, "step": step})
+
+        run = self.investigate(inv, on_step=on_step)
         incident.causes = run.ranking.causes
         services = ranked_services(run.ranking.services or [])
         incident.verdict = {"detected": True, "investigated": True, "error": run.ranking.error,
-                            "top1": bool(services) and services[0] == incident.service,
-                            "top3": incident.service in services[:3],
                             "investigation_s": round(self.clock() - started, 1), "turns": run.turns}
+        if incident.source == "visitor":   # only a visitor's fault has a known answer to score against
+            incident.verdict.update(top1=bool(services) and services[0] == incident.service,
+                                    top3=incident.service in services[:3])
         self._phase(incident, "diagnosed", verdict=incident.verdict)
+        if self.handoff is not None and incident.causes:
+            try:
+                incident.handoff = self.handoff(incident.causes, incident.trail)
+            except Exception as error:   # drafts are a bonus; never lose the diagnosis over them
+                incident.handoff = {"error": f"{type(error).__name__}: {error}"}
+            self.publish({"type": "handoff", "id": incident.id, "handoff": incident.handoff})
+        if self.notify is not None:
+            try:
+                self.notify(incident.public())
+            except Exception:
+                pass
 
     def _record(self, incident: Incident):
         self.records.parent.mkdir(parents=True, exist_ok=True)
@@ -209,6 +257,7 @@ class Lab:
 
     def tally(self) -> dict:
         rows = [json.loads(l) for l in open(self.records)] if self.records.exists() else []
+        rows = [r for r in rows if r.get("source", "visitor") == "visitor"]   # alerts have no known answer
         investigated = [r for r in rows if r["verdict"].get("investigated")]
         return {"incidents": len(rows), "detected": sum(r["verdict"].get("detected", False) for r in rows),
                 "investigated": len(investigated), "top1": sum(r["verdict"].get("top1", False) for r in investigated),
