@@ -13,6 +13,9 @@ Rankers:
 - spark-agent-all: tool-using investigation with logs and traces where the case has them
 - open-one-shot, open-agent, open-agent-all: the same three on Muse Spark Open, Meta's
   open-weight model, served by Baseten; only the model and provider change
+- glimmer-agent-all, glimmer-tuned-agent-all: the all-sources agent on Muse Glimmer
+  (30B, open weights) before and after fine-tuning on hosted Spark's verified
+  train-split investigations (scripts/finetune/)
 - baro, nsigma, mmbaro: published methods, from runs/baselines/ (scripts/run_baselines.py)
 
 By default the investigation is anchored at the benchmark's inject time, which
@@ -58,6 +61,8 @@ LLM_RANKERS = {
     "open-one-shot": ("one-shot", "baseten", None),
     "open-agent": ("agent", "baseten", frozenset({"metrics"})),
     "open-agent-all": ("agent", "baseten", frozenset({"metrics", "logs", "traces"})),
+    "glimmer-agent-all": ("agent", "glimmer", frozenset({"metrics", "logs", "traces"})),
+    "glimmer-tuned-agent-all": ("agent", "glimmer-tuned", frozenset({"metrics", "logs", "traces"})),
 }
 RANKERS = sorted(BASELINES | set(LLM_RANKERS) | {"no-ai"})
 
