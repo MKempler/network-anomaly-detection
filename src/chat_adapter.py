@@ -10,7 +10,9 @@ the agent, verifier and cache unchanged.
 fine-tuning data (scripts/finetune/build_sft.py), so the model is trained and
 evaluated on exactly the same rendering of a conversation.
 
-Tool-call arguments are kept as objects, which Glimmer's chat template requires.
+Glimmer's chat template needs tool-call arguments as objects. Over the API they
+travel as JSON strings, as the OpenAI spec has them, and vLLM parses them before
+templating; so `to_messages` gives objects for training and strings for serving.
 Any reasoning text the model wrote goes in the assistant message's
 `reasoning_content`; so do the short notes written alongside tool calls, which
 the template would otherwise drop. Spark's own reasoning is encrypted by its
@@ -33,8 +35,11 @@ def _text(content) -> str:
     return "".join(p.get("text", "") for p in content or [])
 
 
-def to_messages(instructions: str, items: list[dict]) -> list[dict]:
-    """A Responses API conversation (instructions + input/output items) -> chat messages."""
+def to_messages(instructions: str, items: list[dict], json_arguments: bool = False) -> list[dict]:
+    """A Responses API conversation (instructions + input/output items) -> chat messages.
+
+    Tool-call arguments are objects, or JSON strings with `json_arguments` (for an API request).
+    """
     messages = [{"role": "system", "content": instructions}]
     names: dict[str, str] = {}
     pending: dict | None = None
@@ -72,9 +77,10 @@ def to_messages(instructions: str, items: list[dict]) -> list[dict]:
                 args = json.loads(item.get("arguments") or "{}")
             except json.JSONDecodeError:
                 args = {}
+            args = args if isinstance(args, dict) else {}
             assistant()["tool_calls"].append({"id": item["call_id"], "type": "function",
                                               "function": {"name": item["name"],
-                                                           "arguments": args if isinstance(args, dict) else {}}})
+                                                           "arguments": json.dumps(args) if json_arguments else args}})
         elif kind == "function_call_output":
             flush()
             messages.append({"role": "tool", "tool_call_id": item["call_id"], "name": names.get(item["call_id"], ""),
@@ -120,6 +126,7 @@ class ChatAsResponses:
 
     def create(self, *, model: str, instructions: str, input: list[dict], tools: list[dict] | None = None, **_):
         # store/include are Responses API options with no Chat Completions equivalent
-        completion = self.chat.chat.completions.create(model=model, messages=to_messages(instructions, input),
+        completion = self.chat.chat.completions.create(model=model,
+                                                       messages=to_messages(instructions, input, json_arguments=True),
                                                        tools=chat_tools(tools or []) or None)
         return _Dumped(to_response(completion.model_dump(mode="json")))

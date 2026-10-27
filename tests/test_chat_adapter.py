@@ -61,3 +61,10 @@ def test_adapter_round_trip_keeps_glimmer_reasoning_in_the_conversation():
     nxt = to_messages("sys", [{"role": "user", "content": "go"}, *out["output"],
                               {"type": "function_call_output", "call_id": "t1", "output": "{}"}])
     assert nxt[2]["reasoning_content"] == "cart first" and nxt[3]["name"] == "get_logs"
+    # over the API, arguments go back as JSON strings (vLLM rejects objects there)
+    out2 = ChatAsResponses(fake).responses.create(model="muse-glimmer", instructions="sys", tools=tools,
+                                                  input=[{"role": "user", "content": "go"}, *out["output"],
+                                                         {"type": "function_call_output", "call_id": "t1", "output": "{}"}])
+    assert out2["output"]
+    assert fake.sent["messages"][2]["tool_calls"][0]["function"]["arguments"] == '{"service": "cart"}'
+
