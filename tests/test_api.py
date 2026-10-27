@@ -1,5 +1,9 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.test_lab import make_lab
 
 
 @pytest.fixture(scope="module")
@@ -65,3 +69,58 @@ def test_detect_finds_a_sustained_shift(client):
     assert flag["flag_time"] == 1400
     bad = client.post("/api/detect", json={"times": [1, 2], "columns": ["a_b"], "rows": [[1.0]]})
     assert bad.status_code == 422
+
+
+# -- live lab endpoints, against the simulated lab from test_lab ---------------
+
+
+@pytest.fixture
+def live(client, tmp_path):
+    lab, injector, seen = make_lab(tmp_path)
+    lab.telemetry.rows = [(1000, {"cartservice_latency": 10.0})]
+    client.app.state.lab = lab
+    yield lab
+    client.app.state.lab = None
+
+
+def test_live_endpoints_404_without_the_lab(client):
+    client.app.state.lab = None
+    assert client.get("/api/live/state").status_code == 404
+    assert client.get("/api/live/menu").status_code == 200
+
+
+def test_break_queues_and_rate_limits(client, live):
+    ok = client.post("/api/live/break", json={"service": "cartservice", "fault": "delay"},
+                     headers={"x-forwarded-for": "9.9.9.9"})
+    assert ok.status_code == 200 and ok.json()["position"] == 1
+    again = client.post("/api/live/break", json={"service": "frontend", "fault": "cpu"},
+                        headers={"x-forwarded-for": "9.9.9.9"})
+    assert again.status_code == 429
+    bad = client.post("/api/live/break", json={"service": "investigator", "fault": "pause"},
+                      headers={"x-forwarded-for": "8.8.8.8"})
+    assert bad.status_code == 400
+    state = client.get("/api/live/state").json()
+    assert [q["service"] for q in state["queue"]] == ["cartservice"] and "visitor" not in json.dumps(state)
+
+
+def test_feedback_is_validated_and_stored(client, live, tmp_path, monkeypatch):
+    import src.api as api
+    monkeypatch.setattr(api, "ROOT", tmp_path)
+    assert client.post("/api/live/feedback", json={"incident_id": "abc", "vote": "up", "comment": "nice"}).json() == {"ok": True}
+    assert client.post("/api/live/feedback", json={"incident_id": "abc", "vote": "maybe"}).status_code == 422
+    assert client.post("/api/live/feedback", json={"incident_id": "abc", "vote": "up", "comment": "x" * 501}).status_code == 422
+    stored = (tmp_path / "runs" / "live" / "feedback.jsonl").read_text().splitlines()
+    assert len(stored) == 1 and json.loads(stored[0])["comment"] == "nice"
+
+
+def test_event_stream_greets_then_ticks(client, live):
+    with client.stream("GET", "/api/live/events") as response:
+        assert response.headers["content-type"].startswith("text/event-stream")
+        lines = []
+        for line in response.iter_lines():
+            if line.startswith("data: "):
+                lines.append(json.loads(line[6:]))
+            if len(lines) == 2:
+                break
+    assert lines[0]["type"] == "hello" and lines[1]["type"] == "tick"
+    assert lines[1]["row"] == {"cartservice_latency": 10.0}

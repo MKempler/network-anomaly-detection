@@ -13,17 +13,30 @@ Serves static/console.html and:
 - POST /api/detect                            where our detector would flag a
                                               posted metric stream
 
+With LAB_ENABLED=1 (the live-outage lab, lab/docker-compose.yml) it also runs
+the shared live system:
+- GET  /api/live/menu, GET /api/live/state    the fault menu; current incident,
+                                              queue and public tally
+- POST /api/live/break                        join the queue with one fault
+- GET  /api/live/events                       Server-Sent Events: phases, agent
+                                              steps, and a metrics tick per second
+- POST /api/live/feedback                     a vote and optional comment
+
 Everything served comes from the committed records under runs/, imported into
 the database at startup, so the console needs no raw benchmark data.
 """
 
 import json
+import os
+import queue
+import threading
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -44,7 +57,35 @@ HIDDEN_UNTIL_REVEAL = ("answer", "outcome")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = setup()
+    app.state.lab = start_lab() if os.environ.get("LAB_ENABLED") == "1" else None
     yield
+
+
+def start_lab():
+    """Start the live telemetry recorder and the incident loop (lab mode only)."""
+    import docker
+
+    from src.agent import investigate
+    from src.cache import ModelCache
+    from src.lab.faults import FaultInjector
+    from src.lab.orchestrator import Lab
+    from src.lab.telemetry import Telemetry
+    from src.llm import PROVIDERS, client
+
+    engine_client = docker.from_env()
+    telemetry = Telemetry(engine_client, Path(os.environ.get("LAB_SPANS_FILE", "/spans/spans.jsonl")))
+    telemetry.start()
+    cfg = DEFAULT.live
+    cache = ModelCache(ROOT / "runs" / "live" / "llm.jsonl.gz", client(cfg.provider))
+    model = PROVIDERS[cfg.provider].model
+    sources = frozenset({"metrics", "logs", "traces"})
+
+    def run_investigation(inv, on_step):
+        return investigate(inv, cache, model, sources, DEFAULT.investigation.max_steps, "live-agent", on_step)
+
+    lab = Lab(telemetry, FaultInjector(engine_client), run_investigation)
+    threading.Thread(target=lab.run_forever, daemon=True).start()
+    return lab
 
 
 app = FastAPI(title="Incident investigator", lifespan=lifespan)
@@ -139,6 +180,87 @@ def detect(stream: MetricStream):
     case = Case("posted", "-", "-", frame, services, frozenset({"metrics"}))
     anchor = detector_anchor(case, DEFAULT.anchor)
     return {"flag_time": anchor, "detector": "per-metric z-score alarm", "config": DEFAULT.sections("anchor")}
+
+
+def _lab(request: Request):
+    lab = request.app.state.lab
+    if lab is None:
+        raise HTTPException(404, "the live lab is not running on this server")
+    return lab
+
+
+def _visitor(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
+@app.get("/api/live/menu")
+def live_menu():
+    from src.lab.faults import FAULTS, TARGETS
+    return {"faults": FAULTS, "targets": list(TARGETS)}
+
+
+@app.get("/api/live/state")
+def live_state(request: Request):
+    lab = _lab(request)
+    return {"current": lab.current.public() if lab.current else None, "queue": lab.queue_view(),
+            "tally": lab.tally()}
+
+
+class BreakRequest(BaseModel):
+    service: str
+    fault: str
+
+
+@app.post("/api/live/break")
+def live_break(body: BreakRequest, request: Request):
+    lab = _lab(request)
+    try:
+        incident = lab.submit(body.service, body.fault, _visitor(request))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    except (OverflowError, PermissionError) as error:
+        raise HTTPException(429, str(error))
+    return {"id": incident.id, "position": len(lab.queue_view())}
+
+
+@app.get("/api/live/events")
+def live_events(request: Request):
+    lab = _lab(request)
+    watcher = lab.watch()
+
+    def stream():
+        try:
+            yield f"data: {json.dumps({'type': 'hello', 'tally': lab.tally()})}\n\n"
+            while True:
+                try:
+                    event = watcher.get(timeout=1.0)
+                except queue.Empty:
+                    rows = lab.telemetry.rows
+                    event = {"type": "tick", "time": rows[-1][0], "row": rows[-1][1]} if rows else {"type": "tick"}
+                yield f"data: {json.dumps(event, default=str)}\n\n"
+        finally:
+            lab.unwatch(watcher)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class Feedback(BaseModel):
+    incident_id: str = Field(max_length=32)
+    vote: str = Field(pattern="^(up|down)$")
+    comment: str = Field(default="", max_length=500)
+
+
+@app.post("/api/live/feedback")
+def live_feedback(body: Feedback, request: Request):
+    _lab(request)
+    path = ROOT / "runs" / "live" / "feedback.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **body.model_dump()}
+    with open(path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"ok": True}
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
