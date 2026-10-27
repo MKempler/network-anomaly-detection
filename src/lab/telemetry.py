@@ -51,21 +51,27 @@ def disk_bytes(stats: dict) -> float:
     return float(sum(e.get("value", 0) for e in entries))
 
 
-# Online Boutique instruments 8 of its services; cartservice (.NET) and adservice
-# (Java) emit no spans. RCAEval measured every service from outside (a sidecar
-# proxy), so the lab does the same for these two: a caller's client span to
-# "hipstershop.CartService/GetCart" is how long cartservice took to answer, and
-# becomes a cartservice span. Traced services keep only their own spans.
-UNTRACED = {"CartService": "cartservice", "AdService": "adservice"}
+# RCAEval measured every service from outside, through a sidecar proxy, so a
+# service's latency included what its callers experienced. The lab does the
+# same: a caller's client span to "hipstershop.CartService/GetCart" is how long
+# cartservice took to answer as seen from outside, and becomes a cartservice
+# span too. That matters for three cases:
+# - services Online Boutique doesn't instrument (cartservice, adservice)
+# - faults on the network path, which a service's own spans never see
+# - a frozen service, which emits nothing while its callers time out
+# A service's own server spans are kept alongside.
 CLIENT_CALL = re.compile(r"^/?hipstershop\.(\w+)/(\w+)$")
 
 
 def peer_span(span: dict) -> dict | None:
-    """The callee-side view of a client span to an untraced service, or None."""
+    """The caller-observed view of a client span, attributed to the service it called, or None."""
     m = CLIENT_CALL.match(span["operation"])
-    if not m or m.group(1) not in UNTRACED or span["service"] == UNTRACED[m.group(1)]:
+    if not m:
         return None
-    return {**span, "service": UNTRACED[m.group(1)], "operation": m.group(2),
+    callee = m.group(1).lower()               # ShippingService -> shippingservice
+    if span["service"] == callee:             # the callee's own server span, not a call to it
+        return None
+    return {**span, "service": callee, "operation": m.group(2),
             "span_id": f"{span['span_id']}:peer", "parent_span_id": span["span_id"]}
 
 

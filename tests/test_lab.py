@@ -86,7 +86,7 @@ def test_cpu_and_pause_faults_restore_what_they_changed():
     inj = FaultInjector(docker)
     inj.revert(inj.inject("cartservice", "cpu"))
     inj.revert(inj.inject("cartservice", "pause"))
-    assert docker.container.calls == [("update", {"cpu_period": 100000, "cpu_quota": 5000}),
+    assert docker.container.calls == [("update", {"cpu_period": 100000, "cpu_quota": 1000}),
                                       ("update", {"cpu_period": 100000, "cpu_quota": -1}),
                                       ("pause",), ("unpause",)]
 
@@ -262,11 +262,18 @@ def test_untraced_services_are_measured_from_their_callers():
     assert row["cartservice_latency"] == pytest.approx(400.0) and row["frontend_latency"] == pytest.approx(400.0)
 
 
-def test_traced_services_are_not_duplicated():
-    client = span(100.0, 50, sid="c2")
-    client["name"] = "hipstershop.ProductCatalogService/GetProduct"
+def test_every_callee_is_also_measured_from_its_callers():
+    client = span(100.0, 450, sid="c2")
+    client["name"] = "hipstershop.ShippingService/GetQuote"        # e.g. delay on shipping's network path
     spans = parse_spans(otlp_line("frontend", [client]))
-    assert [s["service"] for s in spans] == ["frontend"]
+    assert sorted(s["service"] for s in spans) == ["frontend", "shippingservice"]
+
+
+def test_a_services_own_server_spans_are_not_duplicated():
+    server = span(100.0, 50, sid="s9")
+    server["name"] = "hipstershop.ProductCatalogService/GetProduct"
+    spans = parse_spans(otlp_line("productcatalogservice", [server]))
+    assert [s["service"] for s in spans] == ["productcatalogservice"]
 
 
 def test_alert_incidents_investigate_without_injecting_and_skip_the_tally(tmp_path):
