@@ -7,7 +7,7 @@ changed so `revert` restores exactly that.
 - delay:  +400 ms on every packet the service sends (netem, from a sidecar
           sharing the service's network namespace)
 - loss:   30% of the service's outgoing packets dropped (netem)
-- cpu:    the service throttled to 5% of one core
+- cpu:    the service throttled to 1% of one core (5% left light services unaffected)
 - pause:  the service frozen (docker pause), as if it hung
 """
 
@@ -17,11 +17,13 @@ NETEM_IMAGE = "nicolaka/netshoot:v0.13"
 FAULTS = {
     "delay": "Slow network: +400 ms on every packet the service sends",
     "loss": "Packet loss: 30% of the service's outgoing packets dropped",
-    "cpu": "CPU starvation: the service throttled to 5% of one core",
+    "cpu": "CPU starvation: the service throttled to 1% of one core",
     "pause": "Hang: the service frozen mid-flight",
 }
+# redis-cart is left off: its only caller (cartservice) emits no traces, so nothing in
+# the lab can observe it, and a fault nobody can see makes a poor demo.
 TARGETS = ("frontend", "cartservice", "checkoutservice", "currencyservice", "emailservice", "paymentservice",
-           "productcatalogservice", "recommendationservice", "shippingservice", "adservice", "redis-cart")
+           "productcatalogservice", "recommendationservice", "shippingservice", "adservice")
 NETEM = {"delay": "delay 400ms", "loss": "loss 30%"}
 
 
@@ -58,7 +60,7 @@ class FaultInjector:
         elif fault == "cpu":
             host = container.attrs.get("HostConfig", {})
             active.undo = {"cpu_period": host.get("CpuPeriod") or 100000, "cpu_quota": host.get("CpuQuota") or -1}
-            container.update(cpu_period=100000, cpu_quota=5000)
+            container.update(cpu_period=100000, cpu_quota=1000)
         elif fault == "pause":
             container.pause()
         return active
