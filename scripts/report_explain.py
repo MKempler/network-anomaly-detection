@@ -37,12 +37,14 @@ def main():
     parser.add_argument("--suite", required=True, choices=["RE1", "RE2", "RE3"])
     parser.add_argument("--part", default="test", choices=["train", "test"])
     parser.add_argument("--markdown", action="store_true")
+    parser.add_argument("--anchor", default="inject", choices=["inject", "detector"])
     args = parser.parse_args()
 
     index, labels = case_index(args.suite), load_labels(args.suite)
     results = {}
     for ranker in ORDER:
-        path = ROOT / "runs" / "explain" / f"{ranker}_{args.suite}_{args.part}.jsonl"
+        suffix = "" if args.anchor == "inject" else "_detector"
+        path = ROOT / "runs" / "explain" / f"{ranker}_{args.suite}_{args.part}{suffix}.jsonl"
         if path.exists():
             results[ranker] = to_results([json.loads(line) for line in open(path)], index, labels)
     if not results:
@@ -70,7 +72,7 @@ def main():
             print(f"| {b} vs {a} | {m1['a_only']} / {m1['b_only']}, {m1['p_value']:.2g} | "
                   f"{m3['a_only']} / {m3['b_only']}, {m3['p_value']:.2g} |")
         return
-    print(f"{args.suite} {args.part}: {cases} cases (95% intervals: bootstrap over fault groups)")
+    print(f"{args.suite} {args.part}, anchored at {args.anchor}: {cases} cases (95% intervals: bootstrap over fault groups)")
     print(f"{'ranker':<40}{'AC@1':>22}{'AC@3':>22}{'Avg@5':>22}{'failed':>8}")
     for name, s, ci in rows:
         print(f"{name:<40}" + "".join(f"{s[k]:>8.3f} [{ci[k][0]:.3f}, {ci[k][1]:.3f}]" for k in ("ac1", "ac3", "avg5"))

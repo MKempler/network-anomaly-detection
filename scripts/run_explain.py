@@ -15,8 +15,10 @@ Rankers:
   open-weight model, served by Baseten; only the model and provider change
 - baro, nsigma, mmbaro: published methods, from runs/baselines/ (scripts/run_baselines.py)
 
-The investigation is anchored at the benchmark's inject time, which is how
-RCAEval gives it to every published method. Model calls go through the
+By default the investigation is anchored at the benchmark's inject time, which
+is how RCAEval gives it to every published method. With --anchor detector, our
+own detector (src/anchor.py) picks the start instead, and a case it never flags
+is a recorded miss for every ranker; those runs write *_detector files. Model calls go through the
 record-and-replay cache at runs/llm/<ranker>_<suite>.jsonl.gz; --offline
 replays it with no network access. Per-case rankings, verification and agent
 trails go to runs/explain/, and a summary line goes to runs/explain_summary.jsonl.
@@ -35,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.agent import investigate  # noqa: E402
+from src.anchor import detector_anchor  # noqa: E402
 from src.cache import ModelCache  # noqa: E402
 from src.config import DEFAULT  # noqa: E402
 from src.evaluate_explain import (CaseResult, bootstrap_ci, breakdown, calibration, hits, mcnemar,  # noqa: E402
@@ -61,6 +64,9 @@ RANKERS = sorted(BASELINES | set(LLM_RANKERS) | {"no-ai"})
 
 def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:
     """Rank one case. Sees the anchor time, never the labels."""
+    if anchor is None:
+        return {"case_id": case_id, "services": None, "causes": [], "error": "detector never flagged",
+                "usage": {}, "turns": None, "seconds": 0.0, "trail": []}
     inv = Investigation(load_case(suite, case_id, case_dir), anchor, DEFAULT.investigation)
     started = time.time()
     trail, turns = [], None
@@ -78,8 +84,8 @@ def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:
             "seconds": round(time.time() - started, 1), "trail": trail}
 
 
-def baseline_records(method, suite) -> dict:
-    path = ROOT / "runs" / "baselines" / f"{method}_{suite}.jsonl"
+def baseline_records(method, suite, suffix="") -> dict:
+    path = ROOT / "runs" / "baselines" / f"{method}_{suite}{suffix}.jsonl"
     out = {}
     for line in open(path):
         r = json.loads(line)
@@ -100,8 +106,8 @@ def to_results(records, index, labels) -> list[CaseResult]:
     return results
 
 
-def load_records(ranker, suite, part):
-    path = ROOT / "runs" / "explain" / f"{ranker}_{suite}_{part}.jsonl"
+def load_records(ranker, suite, part, suffix=""):
+    path = ROOT / "runs" / "explain" / f"{ranker}_{suite}_{part}{suffix}.jsonl"
     return [json.loads(line) for line in open(path)] if path.exists() else None
 
 
@@ -114,7 +120,10 @@ def main():
     parser.add_argument("--limit", type=int, help="only the first N cases (development)")
     parser.add_argument("--offline", action="store_true", help="replay model calls from the cache only")
     parser.add_argument("--no-record", action="store_true")
+    parser.add_argument("--anchor", default="inject", choices=["inject", "detector"],
+                        help="start the investigation at the inject time (default) or where our detector flags")
     args = parser.parse_args()
+    suffix = "" if args.anchor == "inject" else "_detector"
 
     cfg = DEFAULT
     provider = LLM_RANKERS[args.ranker][1] if args.ranker in LLM_RANKERS else None
@@ -122,21 +131,34 @@ def main():
     index, labels = case_index(args.suite), load_labels(args.suite)
     ids = case_ids(args.suite, args.part)[: args.limit]
     commit, dirty = git_state()
-    print(f"{args.ranker} on {args.suite} {args.part}: {len(ids)} cases | commit={commit}{' (dirty)' if dirty else ''}")
+    print(f"{args.ranker} on {args.suite} {args.part}: {len(ids)} cases | anchor={args.anchor} | "
+          f"commit={commit}{' (dirty)' if dirty else ''}")
+    if args.anchor == "inject":
+        anchors = {c: labels[c].inject_time for c in ids}
+    else:
+        anchors = {c: detector_anchor(load_case(args.suite, c, index[c]), cfg.anchor) for c in ids}
+    anchor_stats = None
+    if args.anchor == "detector":
+        offsets = [None if anchors[c] is None else anchors[c] - labels[c].inject_time for c in ids]
+        anchor_stats = {"never": sum(o is None for o in offsets),
+                        "early": sum(o is not None and o < 0 for o in offsets),
+                        "within_120s": sum(o is not None and 0 <= o <= 120 for o in offsets),
+                        "late": sum(o is not None and o > 120 for o in offsets)}
+        print(f"  detector anchors vs the real fault time: {anchor_stats}")
 
     started = time.time()
     if args.ranker in BASELINES:
-        recorded = baseline_records(args.ranker, args.suite)
+        recorded = baseline_records(args.ranker, args.suite, suffix)
         records = [recorded[c] for c in ids]
         cache = None
     else:
         cache = None
         if args.ranker in LLM_RANKERS:
-            cache = ModelCache(ROOT / "runs" / "llm" / f"{args.ranker}_{args.suite}.jsonl.gz",
+            cache = ModelCache(ROOT / "runs" / "llm" / f"{args.ranker}_{args.suite}{suffix}.jsonl.gz",
                                client=None if args.offline else client(provider), offline=args.offline)
         records, done = [], 0
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(run_case, args.ranker, args.suite, c, index[c], labels[c].inject_time,
+            futures = {pool.submit(run_case, args.ranker, args.suite, c, index[c], anchors[c],
                                    cache, model): c for c in ids}
             for future in as_completed(futures):
                 try:
@@ -162,7 +184,7 @@ def main():
         print(f"  by {name}: " + "  ".join(f"{k} {v['ac1']:.2f}/{v['ac3']:.2f}/{v['avg5']:.2f}" for k, v in table.items()))
 
     versus = {}
-    control = load_records("no-ai", args.suite, args.part)
+    control = load_records("no-ai", args.suite, args.part, suffix)
     if control and args.ranker != "no-ai":
         control_results = {r.case_id: r for r in to_results(control, index, labels)}
         if all(r.case_id in control_results for r in results):
@@ -184,16 +206,18 @@ def main():
 
     if args.no_record or args.limit:
         return
+    sections = ("investigation", "stats") if args.anchor == "inject" else ("investigation", "stats", "anchor")
     out_dir = ROOT / "runs" / "explain"
     out_dir.mkdir(parents=True, exist_ok=True)
-    with open(out_dir / f"{args.ranker}_{args.suite}_{args.part}.jsonl", "w") as f:
+    with open(out_dir / f"{args.ranker}_{args.suite}_{args.part}{suffix}.jsonl", "w") as f:
         for r in records:
             f.write(json.dumps(r, default=str) + "\n")
     entry = {"run_id": uuid.uuid4().hex[:12], "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
              "git_commit": commit, "git_dirty": dirty, "suite": args.suite, "part": args.part,
-             "ranker": args.ranker, "anchor": "inject_time",
+             "ranker": args.ranker, "anchor": "inject_time" if args.anchor == "inject" else "detector",
+             "anchor_stats": anchor_stats,
              "provider": provider, "model": model,
-             "config_id": cfg.section_id("investigation", "stats"), "config": cfg.sections("investigation", "stats"),
+             "config_id": cfg.section_id(*sections), "config": cfg.sections(*sections),
              "summary": summary, "ci95": ci, "by_system": by_system, "by_fault": by_fault,
              "vs_no_ai": versus, "calibration": cal, "usage": usage}
     with open(ROOT / "runs" / "explain_summary.jsonl", "a") as f:

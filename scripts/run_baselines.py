@@ -18,7 +18,9 @@ Each case is prepared exactly as RCAEval 1.8.1's main.py prepares it:
 - for multi-source methods, window logts and tracets to the 40 rows (15 s
   bins) either side of the inject time
 
-The inject time is given to these methods, as in RCAEval's protocol. Ranked
+The inject time is given to these methods, as in RCAEval's protocol. With
+--anchor detector the methods get our detector's flag time instead (as
+RCAEval's --tdelta shifts it), and write *_detector files. Ranked
 outputs go to runs/baselines/<method>_<suite>.jsonl under opaque case ids, and
 src/evaluate_explain.py scores them with the same scorer as every other ranker.
 """
@@ -39,7 +41,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 warnings.filterwarnings("ignore")
 
-from src.load_rcaeval import METRICS_FILE, case_index  # noqa: E402
+from src.anchor import detector_anchor  # noqa: E402
+from src.config import DEFAULT  # noqa: E402
+from src.load_rcaeval import METRICS_FILE, case_index, load_case  # noqa: E402
 
 LENGTH_MIN = 20                      # RCAEval main.py default
 METRIC_ROWS = LENGTH_MIN * 60 // 2   # rows on each side of the inject time
@@ -54,13 +58,15 @@ def window(df: pd.DataFrame, inject_time: int, rows: int) -> pd.DataFrame:
     return pd.concat([before, after], ignore_index=True)
 
 
-def prepare(case_dir: Path, suite: str, method: str):
+def prepare(case_dir: Path, suite: str, method: str, anchor: float | None = None):
     data = pd.read_csv(case_dir / METRICS_FILE[suite])
     if "time.1" in data:
         data = data.drop(columns=["time.1"])
     data = data.loc[:, ~data.columns.str.endswith("_latency-50")]
     data = data.replace([np.inf, -np.inf], np.nan).ffill().fillna(0)
     inject_time = int((case_dir / "inject_time.txt").read_text().splitlines()[0].strip())
+    if anchor is not None:
+        inject_time = int(anchor)   # end-to-end mode: our detector's flag replaces the inject time
     data = window(data, inject_time, METRIC_ROWS)
     n_iter = len(data.columns) - 1
     data = data.rename(columns={c: c.replace("_latency-90", "_latency") for c in data.columns
@@ -78,13 +84,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--suite", required=True, choices=sorted(METRICS_FILE))
     parser.add_argument("--method", nargs="+", required=True, choices=["baro", "nsigma", "mmbaro"])
+    parser.add_argument("--anchor", default="inject", choices=["inject", "detector"])
     args = parser.parse_args()
+    suffix = "" if args.anchor == "inject" else "_detector"
 
     from RCAEval.e2e import baro, mmbaro, nsigma  # imported here: only the baselines venv has RCAEval
     methods = {"baro": baro, "nsigma": nsigma, "mmbaro": mmbaro}
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
                             text=True, check=True).stdout.strip()
     index = case_index(args.suite)
+    anchors = {}
+    if args.anchor == "detector":
+        anchors = {c: detector_anchor(load_case(args.suite, c, d), DEFAULT.anchor) for c, d in index.items()}
     out_dir = ROOT / "runs" / "baselines"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,13 +103,18 @@ def main():
         if name in MULTI_SOURCE and args.suite == "RE1":
             print(f"{name}: RE1 has no logs or traces, skipped")
             continue
-        out = out_dir / f"{name}_{args.suite}.jsonl"
+        out = out_dir / f"{name}_{args.suite}{suffix}.jsonl"
         started, failures = time.time(), 0
         with open(out, "w") as f:
             for case_id, case_dir in index.items():
-                data, inject_time, n_iter = prepare(case_dir, args.suite, name)
-                record = {"case_id": case_id, "method": name, "suite": args.suite,
+                record = {"case_id": case_id, "method": name, "suite": args.suite, "anchor": args.anchor,
                           "rcaeval_version": version("RCAEval"), "length_min": LENGTH_MIN, "git_commit": commit}
+                if args.anchor == "detector" and anchors[case_id] is None:
+                    failures += 1
+                    record["error"] = "detector never flagged"
+                    f.write(json.dumps(record) + "\n")
+                    continue
+                data, inject_time, n_iter = prepare(case_dir, args.suite, name, anchors.get(case_id))
                 try:
                     t = time.time()
                     out_ranks = methods[name](data, inject_time, dataset=args.suite.lower(), anomalies=None,
