@@ -193,10 +193,27 @@ nav button.theme { width: 48px; padding: 0; }
 .etable td { border-bottom: 1px solid var(--rule); padding: 9px 10px 9px 0; font-size: 13px; white-space: nowrap; }
 .etable td.v { font: 500 13px var(--mono); }
 .etable td .ci { color: var(--ink-3); font: 400 11px var(--mono); margin-left: 6px; }
-.etable .bar { width: 160px; height: 8px; background: var(--sunken); position: relative; }
+.etable .bar { width: 100%; max-width: 160px; height: 8px; background: var(--sunken); position: relative; }
 .etable .bar div { height: 8px; background: var(--ink-3); }
 .etable tr.top .bar div { background: var(--ink); }
 .etable tr.top td:first-child { font-weight: 500; }
+@media (max-width: 700px) {
+  /* the masthead's tabs share the row, so brand, three views and the theme toggle fit a 360 px phone */
+  .brand { padding: 0 12px; gap: 8px; }
+  .brand b { font-size: 13px; }
+  nav { min-width: 0; justify-content: flex-end; }
+  nav button { padding: 0 10px; font-size: 11px; letter-spacing: 0.04em; }
+  nav button.theme { width: 40px; }
+  .evidence { padding: 20px 16px 48px; overflow-wrap: anywhere; }
+  .evidence h1 { font-size: 24px; }
+  /* phones keep method, top-1, top-3 and failures; bars, intervals and Avg@5 stay on wider screens */
+  .etable { table-layout: auto; }
+  .etable col { width: auto !important; }
+  .etable .wide, .etable td .ci { display: none; }
+  .etable td:first-child { white-space: normal; overflow-wrap: anywhere; padding-right: 12px; }
+  .etable caption .label { white-space: normal; }
+  .etable th { overflow-wrap: normal; }
+}
 
 @media (max-width: 1100px) {
   .frame { grid-template-columns: 1fr; }
@@ -351,7 +368,8 @@ async function api(path, opts) { const r = await fetch(path, opts); const body =
 const SYSTEM = { OB: "Online Boutique", SS: "Sock Shop", TT: "Train Ticket" };
 const RANKERS = { "baro": "BARO", "nsigma": "N-Sigma", "mmbaro": "Multi-source BARO", "no-ai": "No-AI control",
   "spark-one-shot": "Spark · one prompt", "spark-agent": "Spark agent · metrics", "spark-agent-all": "Spark agent · metrics, logs, traces",
-  "open-one-shot": "Spark Open · one prompt", "open-agent": "Spark Open agent · metrics", "open-agent-all": "Spark Open agent · metrics, logs, traces" };
+  "open-one-shot": "Spark Open · one prompt", "open-agent": "Spark Open agent · metrics", "open-agent-all": "Spark Open agent · metrics, logs, traces",
+  "glimmer-agent-all": "Glimmer 30B agent · open weights", "glimmer-tuned-agent-all": "Glimmer 30B agent · fine-tuned on Spark's investigations" };
 const PUBLISHED = new Set(["baro", "nsigma", "mmbaro"]);
 const TAG = { top_deviations: "MET", compare_to_baseline: "MET", get_metric_window: "MET", get_logs: "LOG",
               get_trace_errors: "TRC", get_dependencies: "DEP" };
@@ -583,37 +601,37 @@ $("#reveal-btn").onclick = async () => {
 };
 
 /* ---- evidence --------------------------------------------------------------- */
-function colgroup() { const g = el("colgroup"); ["m", "v", "b", "s", "s", "f"].forEach((c) => g.append(el("col", c))); return g; }
+function colgroup(cols = ["m", "v", "b", "s", "s", "f"]) { const g = el("colgroup"); cols.forEach((c) => g.append(el("col", c))); return g; }
 async function renderEvidence() {
   const root = $("#evidence-body"); root.replaceChildren();
   root.append(el("h1", null, "Every number comes from a recorded, reproducible run"),
-              el("p", "lede", "Held-out test outages from the RCAEval benchmark, scored the way RCAEval scores published methods. Published methods were re-run from their authors' code on the same cases. Intervals are 95%, from a bootstrap over fault groups."));
+              el("p", "lede", "Held-out test outages from the RCAEval benchmark, scored the way RCAEval scores published methods. Published methods were re-run from their authors' code on the same cases. Intervals are 95%, from a bootstrap over fault groups. The Glimmer rows are Meta's 30B open-weight model running the same agent, before and after fine-tuning on hosted Spark's verified investigations of the train split. It is small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls; for these runs it was served on a rented GPU on Modal."));
   for (const suite of ["RE1", "RE2", "RE3"]) {
     const data = await api(`/api/results?suite=${suite}`);
     const t = el("table", "etable"); t.append(colgroup());
     const cap = el("caption"); cap.append(el("span", "label", `${suite} · ${data.rankers[0]?.cases ?? "–"} test outages · investigation starts at the fault time`)); t.append(cap);
-    const head = el("tr"); ["Method", "Top-1", "", "Top-3", "Avg@5", "Failed"].forEach((h) => head.append(el("th", null, h))); t.append(head);
+    const head = el("tr"); ["Method", "Top-1", "", "Top-3", "Avg@5", "Failed"].forEach((h, i) => head.append(el("th", i === 2 || i === 4 ? "wide" : null, h))); t.append(head);
     const best = Math.max(...data.rankers.map((r) => r.ac1));
     data.rankers.sort((a, b) => b.ac1 - a.ac1).forEach((r) => {
       const tr = el("tr", r.ac1 === best ? "top" : "");
       tr.append(el("td", null, (RANKERS[r.ranker] || r.ranker) + (PUBLISHED.has(r.ranker) ? "  (published)" : "")));
       const v = el("td", "v", r.ac1.toFixed(3)); if (r.ci95?.ac1) v.append(el("span", "ci", `[${r.ci95.ac1[0].toFixed(2)}, ${r.ci95.ac1[1].toFixed(2)}]`)); tr.append(v);
-      const bar = el("td"); const track = el("div", "bar"); const fill = el("div"); fill.style.width = `${r.ac1 * 100}%`; track.append(fill); bar.append(track); tr.append(bar);
-      tr.append(el("td", "v", r.ac3.toFixed(3)), el("td", "v", r.avg5.toFixed(3)), el("td", "v", r.failed));
+      const bar = el("td", "wide"); const track = el("div", "bar"); const fill = el("div"); fill.style.width = `${r.ac1 * 100}%`; track.append(fill); bar.append(track); tr.append(bar);
+      tr.append(el("td", "v", r.ac3.toFixed(3)), el("td", "v wide", r.avg5.toFixed(3)), el("td", "v", r.failed));
       t.append(tr);
     });
     root.append(t);
   }
   const det = await api("/api/detection");
-  const t = el("table", "etable"); t.append(colgroup()); const cap = el("caption"); cap.append(el("span", "label", "Detection · 28 SMD servers · event-level scoring, no point adjustment")); t.append(cap);
-  const head = el("tr"); ["Detector", "Precision", "Recall", "F1", "", "Mean delay (rows)"].forEach((h) => head.append(el("th", null, h))); t.append(head);
+  const t = el("table", "etable"); t.append(colgroup(["m", "s", "s", "v", "b", "f"])); const cap = el("caption"); cap.append(el("span", "label", "Detection · 28 SMD servers · event-level scoring, no point adjustment")); t.append(cap);
+  const head = el("tr"); ["Detector", "Precision", "Recall", "F1", "", "Delay (rows)"].forEach((h, i) => head.append(el("th", i === 4 ? "wide" : null, h))); t.append(head);
   const best = Math.max(...det.map((d) => d.f1));
   det.sort((a, b) => b.f1 - a.f1).forEach((d) => {
     const tr = el("tr", d.f1 === best ? "top" : "");
     tr.append(el("td", null, { zscore: "Rolling z-score", iforest: "Isolation forest", lstm: "LSTM autoencoder" }[d.detector] || d.detector),
               el("td", "v", d.precision.toFixed(3)), el("td", "v", d.recall.toFixed(3)));
     const f1 = el("td", "v", d.f1.toFixed(3)); if (d.f1_ci) f1.append(el("span", "ci", `[${d.f1_ci[0].toFixed(2)}, ${d.f1_ci[1].toFixed(2)}]`)); tr.append(f1);
-    const bar = el("td"); const track = el("div", "bar"); const fill = el("div"); fill.style.width = `${d.f1 * 100}%`; track.append(fill); bar.append(track); tr.append(bar);
+    const bar = el("td", "wide"); const track = el("div", "bar"); const fill = el("div"); fill.style.width = `${d.f1 * 100}%`; track.append(fill); bar.append(track); tr.append(bar);
     tr.append(el("td", "v", d.mean_delay?.toFixed(1) ?? "–")); t.append(tr);
   });
   root.append(t);
