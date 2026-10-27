@@ -124,9 +124,27 @@ class ChatAsResponses:
     def __init__(self, chat_client):
         self.chat, self.responses = chat_client, self
 
-    def create(self, *, model: str, instructions: str, input: list[dict], tools: list[dict] | None = None, **_):
+    def create(self, *, model: str, instructions: str, input: list[dict] | str, tools: list[dict] | None = None,
+               text: dict | None = None, **_):
         # store/include are Responses API options with no Chat Completions equivalent
+        items = [{"role": "user", "content": input}] if isinstance(input, str) else input
+        fmt = (text or {}).get("format") or {}
+        if fmt.get("type") == "json_schema":
+            # Structured output. vLLM's response_format isn't enforced for Glimmer (its reasoning channel comes
+            # first), but Glimmer calls tools reliably, so the schema is offered as the only tool and the call's
+            # arguments come back as the response text, which is what a Responses API caller reads.
+            name = fmt.get("name", "answer")
+            tools = [{"type": "function", "name": name, "description": "Submit your answer.",
+                      "parameters": fmt["schema"]}]
+            instructions = f"{instructions}\n\nGive your answer by calling the {name} tool."
         completion = self.chat.chat.completions.create(model=model,
-                                                       messages=to_messages(instructions, input, json_arguments=True),
+                                                       messages=to_messages(instructions, items, json_arguments=True),
                                                        tools=chat_tools(tools or []) or None)
-        return _Dumped(to_response(completion.model_dump(mode="json")))
+        response = to_response(completion.model_dump(mode="json"))
+        if fmt.get("type") == "json_schema":
+            call = next((i for i in response["output"] if i["type"] == "function_call" and i["name"] == name), None)
+            if call is not None:
+                response["output"] = [i for i in response["output"] if i["type"] == "reasoning"] + [
+                    {"type": "message", "role": "assistant", "id": call["call_id"],
+                     "content": [{"type": "output_text", "text": call["arguments"]}]}]
+        return _Dumped(response)

@@ -2,6 +2,7 @@
 
     python scripts/lab_batch.py                       # the default calibration set
     python scripts/lab_batch.py cartservice:delay adservice:pause
+    python scripts/lab_batch.py paymentservice:loss:glimmer-tuned     # pick the investigating model
 
 Each incident is queued through the public API, as a visitor would, and
 followed on the event stream until it recovers. Every incident is recorded by
@@ -46,8 +47,9 @@ def main():
     plan = sys.argv[1:] or DEFAULT
     rows = []
     for n, item in enumerate(plan, 1):
-        service, fault = item.split(":")
-        queued = post("/api/live/break", {"service": service, "fault": fault}, f"10.0.0.{n}")
+        service, fault, *model = item.split(":")
+        queued = post("/api/live/break", {"service": service, "fault": fault, "model": (model or ["spark-open"])[0]},
+                      f"10.0.0.{n}")
         print(f"[{n}/{len(plan)}] {service} {fault} -> incident {queued['id']}", flush=True)
         started = time.time()
         inc = follow(queued["id"])

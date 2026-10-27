@@ -94,6 +94,10 @@ class Live:
     queue_max: int = 20
     visitor_cooldown_s: int = 600
     daily_investigations: int = 400
+    # Muse Glimmer fine-tuned, on a dedicated GPU rented on Modal, as a visitor's alternative. Offered only
+    # when LIVE_GLIMMER=1 and the endpoint is configured; capped per day because each run can keep an H200
+    # up for 5-10 minutes (about $0.35-0.75).
+    glimmer_daily: int = 5
 
 
 @dataclass(frozen=True)

@@ -17,7 +17,7 @@ With LAB_ENABLED=1 (the live-outage lab, lab/docker-compose.yml) it also runs
 the shared live system:
 - GET  /api/live/menu, GET /api/live/state    the fault menu; current incident,
                                               queue and public tally
-- POST /api/live/break                        join the queue with one fault
+- POST /api/live/break                        join the queue with one fault (and which model investigates)
 - GET  /api/live/events                       Server-Sent Events: phases, agent
                                               steps, and a metrics tick per second
 - POST /api/live/feedback                     a vote and optional comment
@@ -74,6 +74,27 @@ async def lifespan(app: FastAPI):
     yield
 
 
+LIVE_MODELS = {
+    "spark-open": {"name": "Muse Spark Open", "detail": "Meta's open-weight Spark, hosted by Baseten"},
+    "glimmer-tuned": {"name": "Muse Glimmer 30B · fine-tuned",
+                      "detail": "Meta's open-weight model, fine-tuned here, on a dedicated GPU rented on Modal. "
+                                "May take a few minutes to wake."},
+}
+
+
+def glimmer_enabled() -> bool:
+    """The fine-tuned Glimmer option needs LIVE_GLIMMER=1 and the endpoint's settings."""
+    if os.environ.get("LIVE_GLIMMER") != "1":
+        return False
+    from src.llm import api_key
+    try:
+        for name in ("GLIMMER_BASE_URL", "GLIMMER_API_KEY", "MODAL_PROXY_KEY", "MODAL_PROXY_SECRET"):
+            api_key(name)
+    except RuntimeError:
+        return False
+    return True
+
+
 def start_lab():
     """Start the live telemetry recorder and the incident loop (lab mode only)."""
     import docker
@@ -91,15 +112,31 @@ def start_lab():
     telemetry = Telemetry(engine_client, Path(os.environ.get("LAB_SPANS_FILE", "/spans/spans.jsonl")))
     telemetry.start()
     cfg = DEFAULT.live
-    cache = ModelCache(ROOT / "runs" / "live" / "llm.jsonl.gz", client(cfg.provider))
-    model = PROVIDERS[cfg.provider].model
     sources = frozenset({"metrics", "logs", "traces"})
+    # model key -> (provider, its call cache, its daily cap); the default runs on cfg.provider
+    runners = {"spark-open": (cfg.provider, ModelCache(ROOT / "runs" / "live" / "llm.jsonl.gz", client(cfg.provider)),
+                              None)}
+    if glimmer_enabled():
+        runners["glimmer-tuned"] = ("glimmer-tuned", ModelCache(ROOT / "runs" / "live" / "llm-glimmer-tuned.jsonl.gz",
+                                                                client("glimmer-tuned")), cfg.glimmer_daily)
 
-    def run_investigation(inv, on_step):
-        return investigate(inv, cache, model, sources, DEFAULT.investigation.max_steps, "live-agent", on_step)
+    def run_investigation(inv, on_step, model="spark-open"):
+        provider, cache, _ = runners[model]
+        return investigate(inv, cache, PROVIDERS[provider].model, sources, DEFAULT.investigation.max_steps,
+                           f"live-agent-{model}", on_step)
 
-    def write_handoff(causes, trail):
-        return handoff.draft(causes, trail, cache, model)
+    def write_handoff(causes, trail, model="spark-open"):
+        provider, cache, _ = runners[model]
+        return handoff.draft(causes, trail, cache, PROVIDERS[provider].model)
+
+    def warm(model):
+        """Wake a scale-to-zero server now; the first model call would otherwise wait out its start."""
+        def ping():
+            try:
+                runners[model][1].client.chat.models.list()
+            except Exception:
+                pass                     # the investigation retries; warming is only a head start
+        threading.Thread(target=ping, daemon=True).start()
 
     slack_url, console = os.environ.get("SLACK_WEBHOOK_URL"), os.environ.get("CONSOLE_URL", "")
 
@@ -107,7 +144,8 @@ def start_lab():
         if slack_url:
             post_slack(slack_url, slack_message(incident, f"{console}/#live" if console else ""))
 
-    lab = Lab(telemetry, FaultInjector(engine_client), run_investigation, handoff=write_handoff, notify=notify)
+    lab = Lab(telemetry, FaultInjector(engine_client), run_investigation, handoff=write_handoff, notify=notify,
+              models={key: cap for key, (_, _, cap) in runners.items()}, warm=warm)
     threading.Thread(target=lab.run_forever, daemon=True).start()
     return lab
 
@@ -225,9 +263,12 @@ def _visitor(request: Request) -> str:
 
 
 @app.get("/api/live/menu")
-def live_menu():
+def live_menu(request: Request):
     from src.lab.faults import FAULTS, TARGETS
-    return {"faults": FAULTS, "targets": list(TARGETS)}
+    lab = getattr(request.app.state, "lab", None)
+    left = lab.models_left() if lab is not None else {"spark-open": None}
+    models = [{"key": k, **LIVE_MODELS[k], "left_today": n} for k, n in left.items()]
+    return {"faults": FAULTS, "targets": list(TARGETS), "models": models}
 
 
 @app.get("/api/live/state")
@@ -240,13 +281,14 @@ def live_state(request: Request):
 class BreakRequest(BaseModel):
     service: str
     fault: str
+    model: str = "spark-open"
 
 
 @app.post("/api/live/break")
 def live_break(body: BreakRequest, request: Request):
     lab = _lab(request)
     try:
-        incident = lab.submit(body.service, body.fault, _visitor(request))
+        incident = lab.submit(body.service, body.fault, _visitor(request), model=body.model)
     except ValueError as error:
         raise HTTPException(400, str(error))
     except (OverflowError, PermissionError) as error:

@@ -141,6 +141,7 @@ nav button.theme { width: 48px; padding: 0; }
 .faults label b { font: 600 12px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; }
 .faults label span { display: block; font-size: 12px; color: var(--ink-2); }
 .faults input { display: none; }
+.faults label:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
 .faults label:has(input:checked) { box-shadow: inset 3px 0 0 var(--signal); background: var(--raised); }
 .note-sm { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
 .row-btns { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
@@ -247,6 +248,10 @@ nav button.theme { width: 48px; padding: 0; }
         <div class="picker" id="target-picker"></div>
         <div class="label" style="margin:14px 0 6px">2 · Fault</div>
         <div class="faults" id="fault-picker"></div>
+        <div id="model-block" hidden>
+          <div class="label" style="margin:14px 0 6px">3 · Who investigates</div>
+          <div class="faults" id="model-picker"></div>
+        </div>
         <div style="margin-top:14px; display:flex; gap:8px; align-items:center">
           <button class="btn signal" id="break-btn">Inject fault</button>
           <span class="mono" id="break-msg" role="status"></span>
@@ -654,6 +659,16 @@ async function initLive() {
   const picker = $("#target-picker"), faults = $("#fault-picker");
   (menu?.targets || []).forEach((t, i) => { const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "target"; r.value = t; r.checked = i === 0; l.append(r, document.createTextNode(t.replace("service", ""))); picker.append(l); });
   Object.entries(menu?.faults || {}).forEach(([k, v], i) => { const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "fault"; r.value = k; r.checked = i === 0; l.append(r, el("b", null, k), el("span", null, v)); faults.append(l); });
+  live.models = Object.fromEntries((menu?.models || []).map((m) => [m.key, m.name]));
+  if ((menu?.models || []).length > 1) {
+    $("#model-block").hidden = false;
+    menu.models.forEach((m, i) => {
+      const l = el("label"); const r = el("input"); r.type = "radio"; r.name = "model"; r.value = m.key; r.checked = i === 0;
+      const left = m.left_today == null ? "" : ` · ${m.left_today} left today`;
+      r.disabled = m.left_today === 0;
+      l.append(r, el("b", null, m.name), el("span", null, m.detail + left)); $("#model-picker").append(l);
+    });
+  }
   let state;
   try { state = await api("/api/live/state"); } catch (e) { state = null; }
   if (!state) {
@@ -665,7 +680,7 @@ async function initLive() {
     return;
   }
   $("#beacon").classList.add("live");
-  setStatus([["SYSTEM", "Online Boutique · 11 services"], ["MODEL", "Muse Spark Open"], ["SOURCES", "metrics · logs · traces"], ["LAB", "live"]]);
+  showModel(state.current?.model);
   renderTally(state.tally); renderQueue(state.queue);
   if (state.current) applyIncident(state.current);
   const events = new EventSource("/api/live/events");
@@ -681,14 +696,19 @@ function renderTally(t) {
 }
 function renderQueue(q) {
   const box = $("#queue"); box.replaceChildren();
-  if (!q.length) box.append(el("div", "note-sm", "Empty. Yours runs next.")); else q.forEach((i, n) => box.append(el("div", null, `${String(n + 1).padStart(2, "0")}  ${i.service} · ${i.fault}`)));
+  if (!q.length) box.append(el("div", "note-sm", "Empty. Yours runs next.")); else q.forEach((i, n) => box.append(el("div", null, `${String(n + 1).padStart(2, "0")}  ${i.service} · ${i.fault}${i.model && i.model !== "spark-open" ? " · " + modelName(i.model) : ""}`)));
+}
+const modelName = (key) => live.models?.[key] || "Muse Spark Open";
+function showModel(key) {
+  setStatus([["SYSTEM", "Online Boutique · 11 services"], ["MODEL", modelName(key)], ["SOURCES", "metrics · logs · traces"], ["LAB", "live"]]);
 }
 function applyIncident(inc) {
   if (!live.incident || live.incident.id !== inc.id) {
+    showModel(inc.model);
     live.incident = inc; $("#live-log").replaceChildren(); $("#live-verdict").replaceChildren(); $("#live-feedback").hidden = true;
     $("#live-handoff-block").hidden = true;
     logLine("live-log", "", "SYS", inc.source === "alertmanager" ? `incident ${inc.id} · Alertmanager fired: ${inc.fault}`
-                                                                 : `incident ${inc.id} · someone broke ${inc.service} with “${inc.fault}”`, "sys");
+                                                                 : `incident ${inc.id} · someone broke ${inc.service} with “${inc.fault}” · ${modelName(inc.model)} investigates`, "sys");
   }
   live.incident = inc; live.start = inc.times.injected || inc.times.queued;
   renderRail("live-rail", inc.phase, inc.times, clockOf(live.start));
@@ -756,8 +776,9 @@ function drawLive() {
 }
 $("#break-btn").onclick = async () => {
   const service = document.querySelector("input[name=target]:checked")?.value, fault = document.querySelector("input[name=fault]:checked")?.value;
+  const model = document.querySelector("input[name=model]:checked")?.value || "spark-open";
   const msg = $("#break-msg"); msg.textContent = "";
-  try { const r = await api("/api/live/break", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ service, fault }) });
+  try { const r = await api("/api/live/break", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ service, fault, model }) });
         msg.textContent = `queued · position ${r.position}`; }
   catch (e) { msg.textContent = String(e.message); }
 };

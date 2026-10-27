@@ -12,6 +12,12 @@ judged against the minutes just before the fault. The agent never learns what
 was injected; the verdict compares its top-ranked service with the injected
 one afterwards. Every incident is appended to runs/live/incidents.jsonl, the
 public tally.
+
+The visitor can also pick which model investigates, from those the lab was
+started with (Muse Spark Open by default; Muse Glimmer fine-tuned, on a rented
+GPU, when enabled). A model can carry its own daily cap, and an optional
+`warm` hook is called when an incident for a non-default model is queued, so a
+server that scales to zero starts while the fault settles and the alarm fires.
 """
 
 import hashlib
@@ -32,6 +38,7 @@ from src.lab.faults import FAULTS, TARGETS
 from src.tools import Investigation
 
 RECORDS = Path(__file__).resolve().parents[2] / "runs" / "live" / "incidents.jsonl"
+DEFAULT_MODEL = "spark-open"
 
 
 @dataclass
@@ -47,6 +54,7 @@ class Incident:
     source: str = "visitor"                        # "visitor" (a fault on the menu) or "alertmanager"
     trail: list = field(default_factory=list)      # the agent's steps, so live incidents can be replayed
     handoff: dict = field(default_factory=dict)    # ticket note and customer update drafts
+    model: str = DEFAULT_MODEL                     # which model investigates
 
     def public(self) -> dict:
         d = asdict(self)
@@ -56,11 +64,14 @@ class Incident:
 
 class Lab:
     def __init__(self, telemetry, injector, investigate, cfg=None, records: Path = RECORDS,
-                 clock=time.time, sleep=time.sleep, handoff=None, notify=None):
+                 clock=time.time, sleep=time.sleep, handoff=None, notify=None, models=None, warm=None):
         self.telemetry, self.injector, self.investigate = telemetry, injector, investigate
         self.handoff, self.notify = handoff, notify      # optional: draft writers and a notifier (Slack)
+        self.models = models or {DEFAULT_MODEL: None}    # model -> its daily cap (None: the shared budget only)
+        self.warm = warm
         self.cfg = cfg or DEFAULT.live
         self.records, self.clock, self.sleep = Path(records), clock, sleep
+        self.model_uses = self._uses_today()      # read back from the records, so a restart keeps the caps
         self.waiting: deque[Incident] = deque()
         self.current: Incident | None = None
         self.last_request: dict[str, float] = {}
@@ -75,20 +86,49 @@ class Lab:
     def visitor_id(address: str) -> str:
         return hashlib.sha256(address.encode()).hexdigest()[:12]
 
-    def submit(self, service: str, fault: str, address: str) -> Incident:
-        if service not in TARGETS or fault not in FAULTS:
+    def submit(self, service: str, fault: str, address: str, model: str = DEFAULT_MODEL) -> Incident:
+        if service not in TARGETS or fault not in FAULTS or model not in self.models:
             raise ValueError("not on the menu")
         visitor, now = self.visitor_id(address), self.clock()
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         with self._lock:
             if len(self.waiting) >= self.cfg.queue_max:
                 raise OverflowError("the queue is full, try again in a few minutes")
             if now - self.last_request.get(visitor, -1e18) < self.cfg.visitor_cooldown_s:
                 raise PermissionError("one break every ten minutes per visitor")
-            incident = Incident(uuid.uuid4().hex[:10], service, fault, visitor, times={"queued": now})
+            used = self.model_uses.get(model, (day, 0))
+            used = used if used[0] == day else (day, 0)
+            cap = self.models[model]
+            if cap is not None and used[1] >= cap:
+                raise OverflowError("today's outages for this model are used up; pick the other one")
+            self.model_uses[model] = (day, used[1] + 1)
+            incident = Incident(uuid.uuid4().hex[:10], service, fault, visitor, times={"queued": now}, model=model)
             self.waiting.append(incident)
             self.last_request[visitor] = now
+        if self.warm is not None and model != DEFAULT_MODEL:
+            self.warm(model)
         self.publish({"type": "queue", "queue": self.queue_view()})
         return incident
+
+    def _uses_today(self) -> dict[str, tuple[str, int]]:
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        counts: dict[str, int] = {}
+        if self.records.exists():
+            for line in open(self.records):
+                r = json.loads(line)
+                queued = r.get("times", {}).get("queued")
+                if queued and datetime.fromtimestamp(queued, timezone.utc).strftime("%Y-%m-%d") == day:
+                    model = r.get("model", DEFAULT_MODEL)
+                    counts[model] = counts.get(model, 0) + 1
+        return {m: (day, n) for m, n in counts.items()}
+
+    def models_left(self) -> dict:
+        """model -> outages left today under its cap (None: no cap of its own)."""
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._lock:
+            return {m: None if cap is None else
+                    cap - (self.model_uses[m][1] if self.model_uses.get(m, ("", 0))[0] == day else 0)
+                    for m, cap in self.models.items()}
 
     def submit_alert(self, start: float, alerts: list[dict]) -> Incident:
         """Queue an investigation anchored at an external alert's start; nothing is injected."""
@@ -104,7 +144,7 @@ class Lab:
 
     def queue_view(self) -> list[dict]:
         with self._lock:
-            return [{"id": i.id, "service": i.service, "fault": i.fault} for i in self.waiting]
+            return [{"id": i.id, "service": i.service, "fault": i.fault, "model": i.model} for i in self.waiting]
 
     # -- watchers ---------------------------------------------------------------
 
@@ -228,7 +268,7 @@ class Lab:
             incident.trail.append(step)
             self.publish({"type": "step", "id": incident.id, "step": step})
 
-        run = self.investigate(inv, on_step=on_step)
+        run = self.investigate(inv, on_step=on_step, model=incident.model)
         incident.causes = run.ranking.causes
         services = ranked_services(run.ranking.services or [])
         incident.verdict = {"detected": True, "investigated": True, "error": run.ranking.error,
@@ -239,7 +279,7 @@ class Lab:
         self._phase(incident, "diagnosed", verdict=incident.verdict)
         if self.handoff is not None and incident.causes:
             try:
-                incident.handoff = self.handoff(incident.causes, incident.trail)
+                incident.handoff = self.handoff(incident.causes, incident.trail, model=incident.model)
             except Exception as error:   # drafts are a bonus; never lose the diagnosis over them
                 incident.handoff = {"error": f"{type(error).__name__}: {error}"}
             self.publish({"type": "handoff", "id": incident.id, "handoff": incident.handoff})

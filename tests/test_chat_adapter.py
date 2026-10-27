@@ -78,3 +78,19 @@ def test_glimmer_clients_send_modal_proxy_auth(monkeypatch):
     c = client("glimmer-tuned")
     assert isinstance(c, ChatAsResponses)
     assert c.chat.default_headers["Modal-Key"] == "wk-test" and c.chat.default_headers["Modal-Secret"] == "ws-test"
+
+
+def test_structured_output_comes_back_as_text_through_a_single_tool():
+    fake = _FakeChat({"id": "c2", "model": "glimmer-tuned", "usage": {},
+                      "choices": [{"message": {"role": "assistant", "content": None, "reasoning_content": "drafting",
+                                               "tool_calls": [{"id": "t9", "type": "function", "function":
+                                                               {"name": "handoff", "arguments": '{"note": "ok"}'}}]}}]})
+    schema = {"type": "json_schema", "name": "handoff", "strict": True, "schema": {"type": "object"}}
+    out = ChatAsResponses(fake).responses.create(model="glimmer-tuned", instructions="sys", input="{}",
+                                                 store=False, text={"format": schema}).model_dump()
+    assert fake.sent["messages"][1] == {"role": "user", "content": "{}"}            # plain-text input
+    assert fake.sent["messages"][0]["content"].endswith("calling the handoff tool.")
+    assert [t["function"]["name"] for t in fake.sent["tools"]] == ["handoff"]
+    assert fake.sent["tools"][0]["function"]["parameters"] == {"type": "object"}
+    assert [i["type"] for i in out["output"]] == ["reasoning", "message"]
+    assert out["output"][1]["content"][0]["text"] == '{"note": "ok"}'

@@ -203,3 +203,30 @@ def test_study_answers_validate_and_names_need_quote_permission(client, tmp_path
     client.post("/api/study/exit", json={"participant": "p02", "would_use": 4, "display_name": "Ana", "quote_ok": True})
     exits = [json.loads(l) for l in (tmp_path / "exit.jsonl").read_text().splitlines()]
     assert [e["display_name"] for e in exits] == ["", "Ana"]
+
+
+def test_menu_offers_the_models_the_lab_runs_and_break_takes_one(client, tmp_path):
+    lab, injector, seen = make_lab(tmp_path, models={"spark-open": None, "glimmer-tuned": 3}, warm=lambda m: None)
+    client.app.state.lab = lab
+    try:
+        menu = client.get("/api/live/menu").json()
+        assert [(m["key"], m["left_today"]) for m in menu["models"]] == [("spark-open", None), ("glimmer-tuned", 3)]
+        ok = client.post("/api/live/break", json={"service": "cartservice", "fault": "delay", "model": "glimmer-tuned"},
+                         headers={"x-forwarded-for": "7.7.7.7"})
+        assert ok.status_code == 200 and lab.waiting[0].model == "glimmer-tuned"
+        assert client.get("/api/live/menu").json()["models"][1]["left_today"] == 2
+        bad = client.post("/api/live/break", json={"service": "frontend", "fault": "cpu", "model": "gpt"},
+                          headers={"x-forwarded-for": "6.6.6.6"})
+        assert bad.status_code == 400
+    finally:
+        client.app.state.lab = None
+
+
+def test_glimmer_option_is_off_unless_enabled(monkeypatch):
+    from src.api import glimmer_enabled
+    monkeypatch.delenv("LIVE_GLIMMER", raising=False)
+    assert glimmer_enabled() is False
+    monkeypatch.setenv("LIVE_GLIMMER", "1")
+    for name in ("GLIMMER_BASE_URL", "GLIMMER_API_KEY", "MODAL_PROXY_KEY", "MODAL_PROXY_SECRET"):
+        monkeypatch.setenv(name, "x")
+    assert glimmer_enabled() is True

@@ -150,17 +150,19 @@ class Run:
     def __init__(self, services): self.ranking, self.turns = Ranking("x", [{"service": s} for s in services]), 3
 
 
-def make_lab(tmp_path, top=("cartservice", "frontend")):
+def make_lab(tmp_path, top=("cartservice", "frontend"), **lab_kwargs):
     clock = Clock()
     tel = FakeTelemetry(clock)
     inj = FakeInjector(tel, clock)
     seen = []
-    def investigate(inv, on_step):
+    def investigate(inv, on_step, model=None):
         seen.append(inv)
+        inv.model_used = model
         on_step({"type": "note", "text": "looking"})
         return Run(list(top))
     cfg = Live(history_s=120, settle_s=10, alarm_timeout_s=60, window_s=20, threshold_sigma=8, persist_s=5)
-    lab = Lab(tel, inj, investigate, cfg, records=tmp_path / "incidents.jsonl", clock=clock, sleep=clock.sleep)
+    lab = Lab(tel, inj, investigate, cfg, records=tmp_path / "incidents.jsonl", clock=clock, sleep=clock.sleep,
+              **lab_kwargs)
     return lab, inj, seen
 
 
@@ -219,7 +221,7 @@ def test_visitor_cooldown_and_menu_are_enforced(tmp_path):
 
 def test_fault_is_reverted_even_if_the_investigation_crashes(tmp_path):
     lab, inj, seen = make_lab(tmp_path)
-    def boom(inv, on_step): raise RuntimeError("model down")
+    def boom(inv, on_step, model=None): raise RuntimeError("model down")
     lab.investigate = boom
     lab.submit("cartservice", "delay", "1.2.3.4")
     with pytest.raises(RuntimeError):
@@ -279,7 +281,7 @@ def test_a_services_own_server_spans_are_not_duplicated():
 def test_alert_incidents_investigate_without_injecting_and_skip_the_tally(tmp_path):
     lab, inj, seen = make_lab(tmp_path)
     drafted, notified = [], []
-    lab.handoff = lambda causes, trail: drafted.append(len(trail)) or {"internal_note": []}
+    lab.handoff = lambda causes, trail, model=None: drafted.append(len(trail)) or {"internal_note": []}
     lab.notify = notified.append
     lab.telemetry.fault_at = lab.clock()                       # something is already wrong
     incident = lab.submit_alert(lab.clock() + 5, [{"name": "HighLatency", "service": "frontend"}])
@@ -288,3 +290,43 @@ def test_alert_incidents_investigate_without_injecting_and_skip_the_tally(tmp_pa
     assert "top1" not in incident.verdict and incident.verdict["investigated"] is True
     assert drafted == [1] and notified[0]["source"] == "alertmanager"
     assert lab.tally()["incidents"] == 0                       # alerts have no known answer
+
+
+def test_visitor_picks_the_model_and_it_is_recorded(tmp_path):
+    warmed = []
+    lab, inj, seen = make_lab(tmp_path, models={"spark-open": None, "glimmer-tuned": 2}, warm=warmed.append)
+    incident = lab.submit("cartservice", "delay", "1.2.3.4", model="glimmer-tuned")
+    assert warmed == ["glimmer-tuned"]                      # the server starts while the fault settles
+    assert lab.queue_view()[0]["model"] == "glimmer-tuned"
+    lab.run(lab.waiting.popleft())
+    assert seen[0].model_used == "glimmer-tuned"
+    assert json.loads((tmp_path / "incidents.jsonl").read_text())["model"] == "glimmer-tuned"
+    lab.submit("frontend", "cpu", "5.6.7.8")                 # the default model needs no warming
+    assert warmed == ["glimmer-tuned"] and lab.waiting[-1].model == "spark-open"
+
+
+def test_a_model_off_the_menu_or_over_its_cap_is_refused(tmp_path):
+    lab, inj, seen = make_lab(tmp_path, models={"spark-open": None, "glimmer-tuned": 1})
+    with pytest.raises(ValueError):
+        lab.submit("cartservice", "delay", "1.2.3.4", model="some-other-model")
+    lab.submit("cartservice", "delay", "1.2.3.4", model="glimmer-tuned")
+    assert lab.models_left() == {"spark-open": None, "glimmer-tuned": 0}
+    with pytest.raises(OverflowError):
+        lab.submit("frontend", "cpu", "5.6.7.8", model="glimmer-tuned")
+    lab.submit("frontend", "cpu", "5.6.7.8")                 # the default model is still open
+    assert lab.waiting[-1].model == "spark-open"
+
+
+def test_only_the_default_model_without_a_lab_menu(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    with pytest.raises(ValueError):
+        lab.submit("cartservice", "delay", "1.2.3.4", model="glimmer-tuned")
+
+
+def test_model_caps_survive_a_restart(tmp_path):
+    lab, inj, seen = make_lab(tmp_path, models={"spark-open": None, "glimmer-tuned": 2})
+    lab.clock.t = __import__("time").time()                  # records are dated by their queue time
+    lab.submit("cartservice", "delay", "1.2.3.4", model="glimmer-tuned")
+    lab.run(lab.waiting.popleft())
+    again, _, _ = make_lab(tmp_path, models={"spark-open": None, "glimmer-tuned": 2})
+    assert again.models_left()["glimmer-tuned"] == 1
