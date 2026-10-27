@@ -124,3 +124,12 @@ def test_event_stream_greets_then_ticks(client, live):
                 break
     assert lines[0]["type"] == "hello" and lines[1]["type"] == "tick"
     assert lines[1]["row"] == {"cartservice_latency": 10.0}
+
+
+def test_spoofed_forwarded_for_does_not_bypass_the_cooldown(client, live):
+    first = client.post("/api/live/break", json={"service": "cartservice", "fault": "delay"},
+                        headers={"x-forwarded-for": "1.1.1.1, 7.7.7.7"})
+    assert first.status_code == 200
+    spoofed = client.post("/api/live/break", json={"service": "frontend", "fault": "cpu"},
+                          headers={"x-forwarded-for": "2.2.2.2, 7.7.7.7"})
+    assert spoofed.status_code == 429      # same proxy-observed address, new fake prefix

@@ -190,8 +190,14 @@ def _lab(request: Request):
 
 
 def _visitor(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    """The visitor's address for rate limiting.
+
+    A client can put anything in X-Forwarded-For, but the proxy in front of us
+    (the tunnel) appends the address it actually saw, so only the last entry is
+    trusted. Without the header, the socket peer is used.
+    """
+    forwarded = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",") if part.strip()]
+    return forwarded[-1] if forwarded else (request.client.host if request.client else "unknown")
 
 
 @app.get("/api/live/menu")
