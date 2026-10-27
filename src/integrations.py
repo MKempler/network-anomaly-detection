@@ -37,8 +37,12 @@ def slack_message(incident: dict, console_url: str = "") -> dict:
     causes = incident.get("causes") or []
     verdict = incident.get("verdict") or {}
     top = causes[0] if causes else None
-    headline = (f"Likely root cause: {top['service']} ({round(100 * top['confidence'])}%)"
-                if top and isinstance(top.get("confidence"), (int, float)) else "Investigation finished without a ranking")
+    if top is None:
+        headline = "Investigation finished without a ranking"
+    elif isinstance(top.get("confidence"), (int, float)):
+        headline = f"Likely root cause: {top['service']} ({round(100 * top['confidence'])}%)"
+    else:
+        headline = f"Likely root cause: {top['service']}"
     blocks = [{"type": "header", "text": _text("plain_text", headline[:150])}]
     context = [f"incident {incident['id']}"]
     if verdict.get("investigation_s") is not None:

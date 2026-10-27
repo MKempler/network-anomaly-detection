@@ -42,3 +42,7 @@ def test_slack_message_carries_causes_verdicts_and_drafts():
 
 def test_slack_message_without_a_ranking():
     assert slack_message({"id": "x", "causes": []})["text"] == "Investigation finished without a ranking"
+
+
+def test_slack_headline_without_confidence_still_names_the_cause():
+    assert slack_message({"id": "x", "causes": [{"service": "cartservice"}]})["text"] == "Likely root cause: cartservice"
