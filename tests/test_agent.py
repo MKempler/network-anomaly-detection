@@ -57,7 +57,7 @@ def test_agent_investigates_then_submits_verified_ranking():
     outputs = [i for i in model.requests[1]["input"] if i.get("type") == "function_call_output"]
     assert outputs[0]["call_id"] == "fc_1" and json.loads(outputs[0]["output"])["call_id"] == "c1"
     assert [step["type"] for step in run.trail] == ["tool", "tool", "submit"]
-    assert run.ranking.usage == {"input_tokens": 30, "output_tokens": 15, "reasoning_tokens": 9}
+    assert run.ranking.usage == {"input_tokens": 30, "output_tokens": 15, "reasoning_tokens": 9, "model_seconds": 0.0}
 
 
 def test_first_message_matches_one_shot_and_requests_replay_reasoning():

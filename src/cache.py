@@ -7,6 +7,9 @@ answers. With `offline=True` a cache miss is an error, which is how
 `run_eval.py --from-cache` reproduces every reported number without network
 access or credits.
 
+Each live call's duration is stored with it, and every response (live or
+replayed) carries it under `_cache`, so replays keep the real model latency.
+
 Encrypted reasoning blobs (`encrypted_content`, which stateless replay resends
 every turn) are dropped from both the key and the stored copy; they would
 otherwise dominate the file size. Replay rebuilds the same stripped requests,
@@ -17,6 +20,7 @@ import gzip
 import hashlib
 import json
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,19 +63,23 @@ class ModelCache:
         with self._lock:
             if key in self.entries:
                 self.hits += 1
-                return self.entries[key]["response"]
+                entry = self.entries[key]
+                return {**entry["response"], "_cache": {"hit": True, "latency_s": entry.get("latency_s")}}
         if self.offline or self.client is None:
             raise CacheMiss(f"no recorded response for request {key[:12]} (offline replay)")
+        started = time.monotonic()
         response = self.client.responses.create(**request).model_dump(mode="json")
+        latency = round(time.monotonic() - started, 3)
         entry = {"key": key, "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                 "request": strip(request), "response": strip(response)}
+                 "latency_s": latency, "request": strip(request), "response": strip(response)}
         with self._lock:
             self.misses += 1
             self.entries[key] = entry
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with gzip.open(self.path, "at") as f:
                 f.write(json.dumps(entry, separators=(",", ":")) + "\n")
-        return response  # live responses keep their blobs for the next turn
+        # live responses keep their blobs for the next turn
+        return {**response, "_cache": {"hit": False, "latency_s": latency}}
 
     def usage(self) -> dict:
         """Token totals over every recorded call."""

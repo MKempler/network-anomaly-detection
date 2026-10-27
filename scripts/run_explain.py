@@ -176,7 +176,8 @@ def main():
         print(f"  calibration: ECE {cal['expected_calibration_error']:.3f}; "
               + "  ".join(f"conf>={s['threshold']}: {s['coverage']:.0%} of cases at AC@1 "
                           f"{s['ac1'] if s['ac1'] is None else round(s['ac1'], 2)}" for s in cal["selective"]))
-    usage = {k: sum(r["usage"].get(k, 0) for r in records) for k in ("input_tokens", "output_tokens", "reasoning_tokens")}
+    usage = {k: round(sum(r["usage"].get(k) or 0 for r in records), 1)
+             for k in ("input_tokens", "output_tokens", "reasoning_tokens", "model_seconds")}
     if cache:
         print(f"  model calls: {cache.misses} new, {cache.hits} from cache | tokens {usage}")
     print(f"{time.time() - started:.0f}s")

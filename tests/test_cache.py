@@ -80,3 +80,13 @@ def test_strip_leaves_other_fields_alone():
     value = {"keep": [1, {"encrypted_content": "z", "id": "r"}], "encrypted_content": "y"}
     assert strip(value) == {"keep": [1, {"id": "r"}]}
     assert json.dumps(strip(value))
+
+
+def test_live_latency_is_recorded_and_returned_on_replay(tmp_path):
+    path = tmp_path / "calls.jsonl.gz"
+    live = ModelCache(path, FakeClient()).create(model="m", input="x")
+    assert live["_cache"]["hit"] is False and live["_cache"]["latency_s"] >= 0
+    replayed = ModelCache(path, offline=True).create(model="m", input="x")
+    assert replayed["_cache"] == {"hit": True, "latency_s": live["_cache"]["latency_s"]}
+    with gzip.open(path, "rt") as f:
+        assert "_cache" not in f.read()     # bookkeeping is not stored inside the response

@@ -55,7 +55,8 @@ def flat_usage(response: dict) -> dict:
     """Token counts from a Responses API response, with reasoning tokens at the top level."""
     u = response.get("usage") or {}
     return {"input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
-            "reasoning_tokens": (u.get("output_tokens_details") or {}).get("reasoning_tokens", 0)}
+            "reasoning_tokens": (u.get("output_tokens_details") or {}).get("reasoning_tokens", 0),
+            "model_seconds": (response.get("_cache") or {}).get("latency_s") or 0.0}
 
 
 def no_ai_ranking(inv: Investigation) -> Ranking:

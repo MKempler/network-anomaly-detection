@@ -117,7 +117,7 @@ def investigate(inv: Investigation, cache: ModelCache, model: str, sources: froz
     text, _ = one_shot_input(inv)
     tools = tool_specs(inv, sources)
     conversation: list[dict] = [{"role": "user", "content": text}]
-    usage = {"input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0}
+    usage = {"input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0, "model_seconds": 0.0}
     trail: list[dict] = []
     instructions = AGENT_INSTRUCTIONS.format(steps=max_steps)
 
