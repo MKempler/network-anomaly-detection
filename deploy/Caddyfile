@@ -1,0 +1,19 @@
+# Public HTTPS in front of the console, which listens only on 127.0.0.1:8000.
+# SITE_ADDRESS is the server's hostname (a domain, or <ip-with-dashes>.sslip.io
+# until one is set up); Caddy gets and renews the certificate itself.
+#
+# Caddy replaces any X-Forwarded-For a visitor sends with their real address,
+# and the API reads the last entry, so the per-visitor cooldown can't be spoofed.
+
+{$SITE_ADDRESS} {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000 {
+		flush_interval -1    # stream the live lab's server-sent events as they happen
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

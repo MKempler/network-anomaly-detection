@@ -220,6 +220,14 @@ docker compose -f lab/docker-compose.yml up -d   # Online Boutique, collector an
 python scripts/lab_batch.py                      # optional: one fault per service, scored
 ```
 
+**On a server.** [`deploy/`](deploy) sets up a fresh Ubuntu 24.04 server: Docker, Caddy for HTTPS, a firewall that allows only SSH and the web, and only the keys the live lab needs.
+
+```bash
+ssh root@SERVER 'bash -s' < deploy/setup.sh        # Docker, Caddy, firewall, updates, the repo
+deploy/push-env.sh SERVER                          # the live lab's keys; the Meta API key stays local
+ssh root@SERVER /opt/epicenter/deploy/start.sh     # build, start, publish over HTTPS
+```
+
 **The fine-tune.** It needs a Modal account.
 
 ```bash
