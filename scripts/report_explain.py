@@ -50,6 +50,10 @@ def main():
     if not results:
         sys.exit(f"no records for {args.suite} {args.part} in runs/explain/")
 
+    unflagged = set()
+    if args.anchor == "detector":
+        no_ai = ROOT / "runs" / "explain" / f"no-ai_{args.suite}_{args.part}_detector.jsonl"
+        unflagged = {r["case_id"] for r in map(json.loads, open(no_ai)) if r.get("error") == "detector never flagged"}
     samples, seed = DEFAULT.stats.bootstrap_samples, DEFAULT.stats.seed
     rows = []
     for ranker, rs in results.items():
@@ -77,6 +81,12 @@ def main():
     for name, s, ci in rows:
         print(f"{name:<40}" + "".join(f"{s[k]:>8.3f} [{ci[k][0]:.3f}, {ci[k][1]:.3f}]" for k in ("ac1", "ac3", "avg5"))
               + f"{s['failed']:>8}")
+    if args.anchor == "detector":
+        print("\nWhen the detector flagged (cases it never flagged are misses for every ranker):")
+        for ranker, rs in results.items():
+            flagged = [r for r in rs if r.case_id not in unflagged]
+            s = score(flagged)
+            print(f"  {LABELS[ranker]:<40} AC@1 {s['ac1']:.3f}  AC@3 {s['ac3']:.3f}  on {s['cases']} flagged cases")
     print("\nPaired exact McNemar (cases only the first ranker gets / only the second gets, p):")
     for b, a, m1, m3 in pairs:
         print(f"  {b} vs {a}: AC@1 {m1['a_only']}/{m1['b_only']} p={m1['p_value']:.2g} | "
