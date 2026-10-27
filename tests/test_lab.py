@@ -100,3 +100,126 @@ def test_only_menu_faults_against_lab_targets():
     with pytest.raises(LookupError):
         inj.inject("adservice", "pause")      # on the menu but not running here
     assert set(FAULTS) == {"delay", "loss", "cpu", "pause"}
+
+
+# -- orchestrator -------------------------------------------------------------
+
+import numpy as np
+import pandas as pd
+
+from src.config import Live
+from src.explain import Ranking
+from src.lab.orchestrator import Lab
+
+
+class Clock:
+    def __init__(self, t=1_000.0): self.t = t
+    def __call__(self): return self.t
+    def sleep(self, s): self.t += s
+
+
+class FakeTelemetry:
+    """Normal noise, then cartservice latency jumps once a fault is active."""
+    def __init__(self, clock): self.clock, self.fault_at = clock, None
+
+    def frame(self, start, end):
+        t = np.arange(int(start), int(end))
+        rng = np.random.default_rng(int(start))
+        lat = 10 + rng.normal(0, 0.5, len(t))
+        if self.fault_at is not None:
+            lat[t >= self.fault_at + 5] += 200
+        return pd.DataFrame({"cartservice_latency": lat, "frontend_cpu": 5 + rng.normal(0, 0.2, len(t))},
+                            index=pd.Index(t.astype(float)))
+
+    def case(self, start, end, case_id):
+        from src.load_rcaeval import Case
+        m = self.frame(start, end)
+        return (Case(case_id, "LIVE", "OB", m, {c: c.rpartition("_")[0] for c in m.columns}, frozenset({"metrics"})),
+                pd.DataFrame(columns=["time", "service", "message"]), pd.DataFrame())
+
+
+class FakeInjector:
+    def __init__(self, telemetry, clock): self.telemetry, self.clock, self.log = telemetry, clock, []
+    def inject(self, service, fault):
+        self.telemetry.fault_at = self.clock(); self.log.append(("inject", service, fault)); return (service, fault)
+    def revert(self, active):
+        self.telemetry.fault_at = None; self.log.append(("revert",) + active)
+
+
+class Run:
+    def __init__(self, services): self.ranking, self.turns = Ranking("x", [{"service": s} for s in services]), 3
+
+
+def make_lab(tmp_path, top=("cartservice", "frontend")):
+    clock = Clock()
+    tel = FakeTelemetry(clock)
+    inj = FakeInjector(tel, clock)
+    seen = []
+    def investigate(inv, on_step):
+        seen.append(inv)
+        on_step({"type": "note", "text": "looking"})
+        return Run(list(top))
+    cfg = Live(history_s=120, settle_s=10, alarm_timeout_s=60, window_s=20, threshold_sigma=8, persist_s=5)
+    lab = Lab(tel, inj, investigate, cfg, records=tmp_path / "incidents.jsonl", clock=clock, sleep=clock.sleep)
+    return lab, inj, seen
+
+
+def test_incident_runs_end_to_end_and_is_recorded(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    events = lab.watch()
+    incident = lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    assert inj.log == [("inject", "cartservice", "delay"), ("revert", "cartservice", "delay")]
+    assert incident.verdict["top1"] is True and incident.verdict["detected"] is True
+    assert lab.tally() == {"incidents": 1, "detected": 1, "investigated": 1, "top1": 1, "top3": 1}
+    record = (tmp_path / "incidents.jsonl").read_text()
+    assert "visitor" not in record and "1.2.3.4" not in record
+
+
+def test_agent_is_never_told_the_injection_time(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    incident = lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    [inv] = seen
+    assert inv.anchor == incident.times["anomaly_start"]
+    assert incident.times["injected"] < incident.times["anomaly_start"] < incident.times["alarm"]
+    assert inv.cfg.baseline_s == 120 and inv.cfg.window_s == 20
+
+
+def test_phases_are_published_in_order(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    q = lab.watch()
+    lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    phases = []
+    while not q.empty():
+        e = q.get_nowait()
+        if e["type"] == "phase":
+            phases.append(e["incident"]["phase"])
+    assert phases == ["settling", "injected", "alarm", "investigating", "diagnosed", "recovered"]
+
+
+def test_wrong_top_pick_scores_a_miss(tmp_path):
+    lab, inj, seen = make_lab(tmp_path, top=("frontend", "redis-cart", "cartservice"))
+    incident = lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    assert incident.verdict["top1"] is False and incident.verdict["top3"] is True
+
+
+def test_visitor_cooldown_and_menu_are_enforced(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    lab.submit("cartservice", "delay", "1.2.3.4")
+    with pytest.raises(PermissionError):
+        lab.submit("frontend", "cpu", "1.2.3.4")
+    with pytest.raises(ValueError):
+        lab.submit("investigator", "pause", "5.6.7.8")
+
+
+def test_fault_is_reverted_even_if_the_investigation_crashes(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    def boom(inv, on_step): raise RuntimeError("model down")
+    lab.investigate = boom
+    lab.submit("cartservice", "delay", "1.2.3.4")
+    with pytest.raises(RuntimeError):
+        lab.run(lab.waiting.popleft())
+    assert inj.log[-1] == ("revert", "cartservice", "delay")

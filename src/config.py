@@ -81,6 +81,22 @@ class Anchor:
 
 
 @dataclass(frozen=True)
+class Live:
+    """Live-outage lab. Not part of any evaluation spec; tuned on the running lab."""
+    history_s: int = 240            # normal reference: the minutes before each incident
+    settle_s: int = 90              # recovery time between incidents
+    alarm_timeout_s: int = 180      # no alarm by then: a detection miss
+    window_s: int = 60              # fault data collected after the alarm before investigating
+    threshold_sigma: float = 8.0
+    persist_s: int = 15
+    rel_std_floor: float = 0.05
+    provider: str = "baseten"       # Muse Spark Open: about twice as fast as hosted
+    queue_max: int = 20
+    visitor_cooldown_s: int = 600
+    daily_investigations: int = 400
+
+
+@dataclass(frozen=True)
 class Config:
     scoring: EventScoring = field(default_factory=EventScoring)
     stats: Stats = field(default_factory=Stats)
@@ -89,6 +105,7 @@ class Config:
     lstm: LSTMAutoencoder = field(default_factory=LSTMAutoencoder)
     investigation: Investigation = field(default_factory=Investigation)
     anchor: Anchor = field(default_factory=Anchor)
+    live: Live = field(default_factory=Live)
 
     def sections(self, *names: str) -> dict:
         return {name: asdict(getattr(self, name)) for name in names}
