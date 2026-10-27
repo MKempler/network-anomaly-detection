@@ -21,11 +21,17 @@ the shared live system:
 - GET  /api/live/events                       Server-Sent Events: phases, agent
                                               steps, and a metrics tick per second
 - POST /api/live/feedback                     a vote and optional comment
+- POST /webhook/alertmanager                  a Prometheus Alertmanager webhook; needs
+                                              WEBHOOK_TOKEN, queues an investigation
+                                              anchored at the alert's start
+- GET  /api/live/slack/{incident_id}          the Slack message for a finished incident
+                                              (posted automatically if SLACK_WEBHOOK_URL)
 
 Everything served comes from the committed records under runs/, imported into
 the database at startup, so the console needs no raw benchmark data.
 """
 
+import hmac
 import json
 import os
 import queue
@@ -45,6 +51,7 @@ from sqlalchemy.orm import Session
 from src.anchor import detector_anchor
 from src.config import DEFAULT
 from src.db import DetectionRun, EvalResult, setup
+from src.integrations import parse_alertmanager, slack_message
 from src.load_rcaeval import Case, service_of
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,8 +72,10 @@ def start_lab():
     """Start the live telemetry recorder and the incident loop (lab mode only)."""
     import docker
 
+    from src import handoff
     from src.agent import investigate
     from src.cache import ModelCache
+    from src.integrations import post_slack, slack_message
     from src.lab.faults import FaultInjector
     from src.lab.orchestrator import Lab
     from src.lab.telemetry import Telemetry
@@ -83,7 +92,16 @@ def start_lab():
     def run_investigation(inv, on_step):
         return investigate(inv, cache, model, sources, DEFAULT.investigation.max_steps, "live-agent", on_step)
 
-    lab = Lab(telemetry, FaultInjector(engine_client), run_investigation)
+    def write_handoff(causes, trail):
+        return handoff.draft(causes, trail, cache, model)
+
+    slack_url, console = os.environ.get("SLACK_WEBHOOK_URL"), os.environ.get("CONSOLE_URL", "")
+
+    def notify(incident):
+        if slack_url:
+            post_slack(slack_url, slack_message(incident, f"{console}/#live" if console else ""))
+
+    lab = Lab(telemetry, FaultInjector(engine_client), run_investigation, handoff=write_handoff, notify=notify)
     threading.Thread(target=lab.run_forever, daemon=True).start()
     return lab
 
@@ -267,6 +285,37 @@ def live_feedback(body: Feedback, request: Request):
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")
     return {"ok": True}
+
+
+@app.post("/webhook/alertmanager", status_code=202)
+async def alertmanager(request: Request):
+    lab = _lab(request)
+    token = os.environ.get("WEBHOOK_TOKEN")
+    if not token:
+        raise HTTPException(404, "webhook disabled: set WEBHOOK_TOKEN to enable it")
+    given = request.headers.get("authorization", "").removeprefix("Bearer ").strip() or request.query_params.get("token")
+    if not hmac.compare_digest(given or "", token):
+        raise HTTPException(401, "bad token")
+    try:
+        alert = parse_alertmanager(await request.json())
+        incident = lab.submit_alert(alert["start"], alert["alerts"])
+    except (ValueError, KeyError) as error:
+        raise HTTPException(400, f"not an Alertmanager payload with firing alerts: {error}")
+    except OverflowError as error:
+        raise HTTPException(429, str(error))
+    return {"id": incident.id, "anchor": alert["start"], "alerts": len(alert["alerts"])}
+
+
+@app.get("/api/live/slack/{incident_id}")
+def live_slack(incident_id: str, request: Request):
+    lab = _lab(request)
+    if not incident_id.isalnum() or not lab.records.exists():
+        raise HTTPException(404, "unknown incident")
+    for line in open(lab.records):
+        record = json.loads(line)
+        if record["id"] == incident_id:
+            return slack_message(record)
+    raise HTTPException(404, "unknown incident")
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

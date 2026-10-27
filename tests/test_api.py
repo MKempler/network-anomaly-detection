@@ -133,3 +133,32 @@ def test_spoofed_forwarded_for_does_not_bypass_the_cooldown(client, live):
     spoofed = client.post("/api/live/break", json={"service": "frontend", "fault": "cpu"},
                           headers={"x-forwarded-for": "2.2.2.2, 7.7.7.7"})
     assert spoofed.status_code == 429      # same proxy-observed address, new fake prefix
+
+
+ALERT = {"alerts": [{"status": "firing", "labels": {"alertname": "HighLatency", "service": "frontend"},
+                     "startsAt": "2026-10-27T16:20:05Z"}]}
+
+
+def test_webhook_is_disabled_without_a_token(client, live, monkeypatch):
+    monkeypatch.delenv("WEBHOOK_TOKEN", raising=False)
+    assert client.post("/webhook/alertmanager", json=ALERT).status_code == 404
+
+
+def test_webhook_needs_the_right_token_and_a_real_payload(client, live, monkeypatch):
+    monkeypatch.setenv("WEBHOOK_TOKEN", "s3cret")
+    assert client.post("/webhook/alertmanager", json=ALERT).status_code == 401
+    assert client.post("/webhook/alertmanager", json=ALERT, headers={"authorization": "Bearer nope"}).status_code == 401
+    assert client.post("/webhook/alertmanager", json={"alerts": []},
+                       headers={"authorization": "Bearer s3cret"}).status_code == 400
+    ok = client.post("/webhook/alertmanager", json=ALERT, headers={"authorization": "Bearer s3cret"})
+    assert ok.status_code == 202 and ok.json()["alerts"] == 1
+    assert live.waiting[0].source == "alertmanager"
+
+
+def test_slack_preview_for_a_recorded_incident(client, live):
+    live.submit("cartservice", "delay", "4.4.4.4")
+    incident = live.waiting.popleft()
+    live.run(incident)
+    msg = client.get(f"/api/live/slack/{incident.id}").json()
+    assert msg["text"].startswith("Likely root cause: cartservice")
+    assert client.get("/api/live/slack/nope").status_code == 404
