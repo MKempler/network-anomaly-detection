@@ -142,6 +142,16 @@ nav button.theme { width: 48px; padding: 0; }
 .faults label:has(input:checked) { box-shadow: inset 3px 0 0 var(--signal); background: var(--raised); }
 .note-sm { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
 .row-btns { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+.draft { margin-bottom: 12px; }
+.draft .head { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.draft p { margin: 0 0 4px; font-size: 13px; display: grid; grid-template-columns: 14px 1fr; gap: 6px; }
+.draft p i { font-style: normal; font: 500 12px var(--mono); }
+.draft p i.ok { color: var(--ok); } .draft p i.bad { color: var(--signal); }
+.draft p span.c { font: 400 11px var(--mono); color: var(--ink-3); }
+.slack { margin-top: 10px; border: 1px solid var(--rule-strong); padding: 10px 12px; font-size: 13px; background: var(--raised); }
+.slack .h { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.slack .ctx { font: 400 11px var(--mono); color: var(--ink-3); margin-bottom: 8px; }
+.slack .sec { white-space: pre-wrap; margin-bottom: 8px; }
 
 /* figures */
 .figs { display: grid; grid-template-columns: repeat(3, 1fr); }
@@ -239,6 +249,12 @@ nav button.theme { width: 48px; padding: 0; }
           <button class="btn" data-vote="up">Useful</button><button class="btn" data-vote="down">Not useful</button>
           <span class="mono" id="fb-msg" role="status"></span>
         </div>
+      </div>
+      <div class="block" id="live-handoff-block" hidden>
+        <h3 class="label">Handoff · drafted from the evidence</h3>
+        <div id="live-handoff"></div>
+        <button class="btn" id="slack-btn" style="margin-top:12px">Slack message</button>
+        <div id="slack-preview" class="slack" hidden></div>
       </div>
     </div>
   </div>
@@ -609,7 +625,9 @@ function renderQueue(q) {
 function applyIncident(inc) {
   if (!live.incident || live.incident.id !== inc.id) {
     live.incident = inc; $("#live-log").replaceChildren(); $("#live-verdict").replaceChildren(); $("#live-feedback").hidden = true;
-    logLine("live-log", "", "SYS", `incident ${inc.id} · someone broke ${inc.service} with “${inc.fault}”`, "sys");
+    $("#live-handoff-block").hidden = true;
+    logLine("live-log", "", "SYS", inc.source === "alertmanager" ? `incident ${inc.id} · Alertmanager fired: ${inc.fault}`
+                                                                 : `incident ${inc.id} · someone broke ${inc.service} with “${inc.fault}”`, "sys");
   }
   live.incident = inc; live.start = inc.times.injected || inc.times.queued;
   renderRail("live-rail", inc.phase, inc.times, clockOf(live.start));
@@ -628,7 +646,44 @@ function onLiveEvent(e) {
     else if (text) logLine("live-log", stamp, "SYS", text, inc.phase === "alarm" || inc.phase === "missed" ? "alarm" : "sys");
     drawLive();
   } else if (e.type === "step" && live.incident && e.id === live.incident.id) logStep("live-log", e.step, clockOf(live.start)(Date.now() / 1000));
+  else if (e.type === "handoff" && live.incident && e.id === live.incident.id) {
+    $("#live-handoff-block").hidden = false; $("#slack-preview").hidden = true; renderHandoff("live-handoff", e.handoff);
+    logLine("live-log", clockOf(live.start)(Date.now() / 1000), "SYS", "handoff drafted: ticket note and customer update", "sys");
+  }
 }
+function renderHandoff(id, handoff) {
+  const box = $(`#${id}`); box.replaceChildren();
+  if (!handoff || handoff.error) { box.append(el("div", "note-sm", handoff?.error || "No drafts.")); return; }
+  for (const [part, title] of [["internal_note", "Internal note"], ["customer_update", "Customer update"]]) {
+    const sentences = handoff[part] || []; if (!sentences.length) continue;
+    const d = el("div", "draft"); const head = el("div", "head");
+    const g = handoff[`${part}_grounded`];
+    head.append(el("span", "label", title), el("span", "mono", g == null ? "" : `${Math.round(g * 100)}% grounded`));
+    d.append(head);
+    for (const s of sentences) {
+      const p = el("p"); p.append(el("i", s.grounded ? "ok" : "bad", s.grounded ? "✓" : "✗"));
+      const t = el("span", null, s.text + " "); t.append(el("span", "c", (s.evidence || []).join(" "))); p.append(t); d.append(p);
+    }
+    box.append(d);
+  }
+}
+function renderSlack(msg) {
+  const box = $("#slack-preview"); box.replaceChildren();
+  for (const b of msg.blocks || []) {
+    if (b.type === "header") box.append(el("div", "h", b.text.text));
+    else if (b.type === "context") box.append(el("div", "ctx", b.elements.map((e) => e.text).join(" ")));
+    else if (b.type === "section") box.append(el("div", "sec", b.text.text.replace(/\*/g, "").replace(/`/g, "")));
+    else if (b.type === "actions") for (const e of b.elements) { const a = el("a", "btn", e.text.text); a.href = e.url; a.target = "_blank"; a.rel = "noopener"; box.append(a); }
+  }
+}
+$("#slack-btn").onclick = async () => {
+  const box = $("#slack-preview");
+  if (!box.hidden) { box.hidden = true; return; }
+  if (!live.incident) return;
+  try { renderSlack(await api(`/api/live/slack/${live.incident.id}`)); box.hidden = false; }
+  catch (e) { box.replaceChildren(el("div", "note-sm", "The Slack message is ready once the incident is recorded.")); box.hidden = false; }
+};
+
 function drawLive() {
   if (!live.rows.length) return;
   const t1 = live.rows[live.rows.length - 1][0], t0 = t1 - 300;
