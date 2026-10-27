@@ -22,7 +22,6 @@ trails go to runs/explain/, and a summary line goes to runs/explain_summary.json
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 import uuid
@@ -41,6 +40,7 @@ from src.evaluate_explain import (CaseResult, bootstrap_ci, breakdown, calibrati
 from src.explain import no_ai_ranking, spark_one_shot  # noqa: E402
 from src.llm import DEFAULT_MODEL, client  # noqa: E402
 from src.load_rcaeval import case_index, load_case, load_labels  # noqa: E402
+from src.provenance import git_state  # noqa: E402
 from src.splits import case_ids  # noqa: E402
 from src.tools import Investigation  # noqa: E402
 
@@ -48,14 +48,6 @@ BASELINES = {"baro", "nsigma", "mmbaro"}
 LLM_RANKERS = {"spark-one-shot", "spark-agent", "spark-agent-all"}
 RANKERS = sorted(BASELINES | LLM_RANKERS | {"no-ai"})
 AGENT_SOURCES = {"spark-agent": frozenset({"metrics"}), "spark-agent-all": frozenset({"metrics", "logs", "traces"})}
-
-
-def git_state() -> tuple[str, bool]:
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
-                            text=True, check=True).stdout.strip()
-    dirty = bool(subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT,
-                                capture_output=True, text=True, check=True).stdout.strip())
-    return commit, dirty
 
 
 def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:

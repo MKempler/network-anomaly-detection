@@ -16,7 +16,6 @@ uncommitted changes are marked dirty.
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 import uuid
@@ -30,6 +29,7 @@ from src.config import DEFAULT, DETECTION_SECTIONS  # noqa: E402
 from src.detectors import IsolationForestDetector, LSTMAutoencoderDetector, ZScoreDetector  # noqa: E402
 from src.evaluate_detect import bootstrap_ci, bootstrap_f1_difference, combine, score_events  # noqa: E402
 from src.load_smd import MinMaxScaler, list_machines, load_machine  # noqa: E402
+from src.provenance import git_state  # noqa: E402
 
 RUNS = ROOT / "runs" / "detection.jsonl"
 DETECTORS = {
@@ -37,14 +37,6 @@ DETECTORS = {
     "iforest": lambda cfg: IsolationForestDetector(cfg.iforest),
     "lstm": lambda cfg: LSTMAutoencoderDetector(cfg.lstm),
 }
-
-
-def git_state() -> tuple[str, bool]:
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
-                            capture_output=True, text=True, check=True).stdout.strip()
-    dirty = bool(subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT,
-                                capture_output=True, text=True, check=True).stdout.strip())
-    return commit, dirty
 
 
 def counts(s) -> dict:
