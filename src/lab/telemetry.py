@@ -12,6 +12,7 @@ The arithmetic lives in small pure functions so it is testable without Docker.
 """
 
 import json
+import re
 import threading
 import time
 from collections import defaultdict, deque
@@ -50,6 +51,24 @@ def disk_bytes(stats: dict) -> float:
     return float(sum(e.get("value", 0) for e in entries))
 
 
+# Online Boutique instruments 8 of its services; cartservice (.NET) and adservice
+# (Java) emit no spans. RCAEval measured every service from outside (a sidecar
+# proxy), so the lab does the same for these two: a caller's client span to
+# "hipstershop.CartService/GetCart" is how long cartservice took to answer, and
+# becomes a cartservice span. Traced services keep only their own spans.
+UNTRACED = {"CartService": "cartservice", "AdService": "adservice"}
+CLIENT_CALL = re.compile(r"^/?hipstershop\.(\w+)/(\w+)$")
+
+
+def peer_span(span: dict) -> dict | None:
+    """The callee-side view of a client span to an untraced service, or None."""
+    m = CLIENT_CALL.match(span["operation"])
+    if not m or m.group(1) not in UNTRACED or span["service"] == UNTRACED[m.group(1)]:
+        return None
+    return {**span, "service": UNTRACED[m.group(1)], "operation": m.group(2),
+            "span_id": f"{span['span_id']}:peer", "parent_span_id": span["span_id"]}
+
+
 def parse_spans(line: str) -> list[dict]:
     """One OTLP JSON export line -> spans as dicts in the trace loader's columns."""
     out = []
@@ -65,7 +84,7 @@ def parse_spans(line: str) -> list[dict]:
                             "duration_us": (end - start) / 1e3,
                             # OTLP status code 2 is ERROR; map onto gRPC-style codes (0 OK, 2 UNKNOWN)
                             "status_code": 2.0 if (sp.get("status") or {}).get("code") == 2 else 0.0})
-    return out
+    return out + [p for p in map(peer_span, out) if p is not None]
 
 
 def span_metrics(spans: list[dict], second: int) -> dict[str, float]:

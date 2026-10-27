@@ -248,3 +248,20 @@ def test_rows_wait_for_late_spans_before_being_finalized(tmp_path):
     [(second, row)] = list(tel.rows)
     assert second == 100 and row["cart_cpu"] == 1.0 and row["cart_workload"] == 1
     assert 100 not in tel._pending
+
+
+def test_untraced_services_are_measured_from_their_callers():
+    client = span(100.0, 400, sid="c1")
+    client["name"] = "hipstershop.CartService/GetCart"
+    spans = parse_spans(otlp_line("frontend", [client]))
+    peer = next(s for s in spans if s["service"] == "cartservice")
+    assert (peer["operation"], peer["parent_span_id"], peer["duration_us"]) == ("GetCart", "c1", 400_000)
+    row = span_metrics(spans, 100)
+    assert row["cartservice_latency"] == pytest.approx(400.0) and row["frontend_latency"] == pytest.approx(400.0)
+
+
+def test_traced_services_are_not_duplicated():
+    client = span(100.0, 50, sid="c2")
+    client["name"] = "hipstershop.ProductCatalogService/GetProduct"
+    spans = parse_spans(otlp_line("frontend", [client]))
+    assert [s["service"] for s in spans] == ["frontend"]
