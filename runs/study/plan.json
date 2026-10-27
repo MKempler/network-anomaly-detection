@@ -1,0 +1,170 @@
+{
+ "seed": 20261101,
+ "suite": "RE2",
+ "cases": [
+  "re2-1fbd9c8a52",
+  "re2-2630e3e6ae",
+  "re2-5cd5a675c0",
+  "re2-23063f7a6f",
+  "re2-d0c3a381af",
+  "re2-e6f87bc51c"
+ ],
+ "slots": [
+  [
+   {
+    "case_id": "re2-1fbd9c8a52",
+    "tool": true
+   },
+   {
+    "case_id": "re2-2630e3e6ae",
+    "tool": false
+   },
+   {
+    "case_id": "re2-5cd5a675c0",
+    "tool": true
+   },
+   {
+    "case_id": "re2-23063f7a6f",
+    "tool": false
+   },
+   {
+    "case_id": "re2-d0c3a381af",
+    "tool": true
+   },
+   {
+    "case_id": "re2-e6f87bc51c",
+    "tool": false
+   }
+  ],
+  [
+   {
+    "case_id": "re2-2630e3e6ae",
+    "tool": true
+   },
+   {
+    "case_id": "re2-5cd5a675c0",
+    "tool": false
+   },
+   {
+    "case_id": "re2-23063f7a6f",
+    "tool": true
+   },
+   {
+    "case_id": "re2-d0c3a381af",
+    "tool": false
+   },
+   {
+    "case_id": "re2-e6f87bc51c",
+    "tool": true
+   },
+   {
+    "case_id": "re2-1fbd9c8a52",
+    "tool": false
+   }
+  ],
+  [
+   {
+    "case_id": "re2-5cd5a675c0",
+    "tool": true
+   },
+   {
+    "case_id": "re2-23063f7a6f",
+    "tool": false
+   },
+   {
+    "case_id": "re2-d0c3a381af",
+    "tool": true
+   },
+   {
+    "case_id": "re2-e6f87bc51c",
+    "tool": false
+   },
+   {
+    "case_id": "re2-1fbd9c8a52",
+    "tool": true
+   },
+   {
+    "case_id": "re2-2630e3e6ae",
+    "tool": false
+   }
+  ],
+  [
+   {
+    "case_id": "re2-23063f7a6f",
+    "tool": true
+   },
+   {
+    "case_id": "re2-d0c3a381af",
+    "tool": false
+   },
+   {
+    "case_id": "re2-e6f87bc51c",
+    "tool": true
+   },
+   {
+    "case_id": "re2-1fbd9c8a52",
+    "tool": false
+   },
+   {
+    "case_id": "re2-2630e3e6ae",
+    "tool": true
+   },
+   {
+    "case_id": "re2-5cd5a675c0",
+    "tool": false
+   }
+  ],
+  [
+   {
+    "case_id": "re2-d0c3a381af",
+    "tool": true
+   },
+   {
+    "case_id": "re2-e6f87bc51c",
+    "tool": false
+   },
+   {
+    "case_id": "re2-1fbd9c8a52",
+    "tool": true
+   },
+   {
+    "case_id": "re2-2630e3e6ae",
+    "tool": false
+   },
+   {
+    "case_id": "re2-5cd5a675c0",
+    "tool": true
+   },
+   {
+    "case_id": "re2-23063f7a6f",
+    "tool": false
+   }
+  ],
+  [
+   {
+    "case_id": "re2-e6f87bc51c",
+    "tool": true
+   },
+   {
+    "case_id": "re2-1fbd9c8a52",
+    "tool": false
+   },
+   {
+    "case_id": "re2-2630e3e6ae",
+    "tool": true
+   },
+   {
+    "case_id": "re2-5cd5a675c0",
+    "tool": false
+   },
+   {
+    "case_id": "re2-23063f7a6f",
+    "tool": true
+   },
+   {
+    "case_id": "re2-d0c3a381af",
+    "tool": false
+   }
+  ]
+ ]
+}
