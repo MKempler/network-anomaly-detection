@@ -1,0 +1,47 @@
+{
+ "hparams": {
+  "epochs": 2,
+  "rank": 32,
+  "lr": 0.0001,
+  "accumulation": 8,
+  "max_steps": 2
+ },
+ "max_len": 32768,
+ "model": "meta-models/Muse-Glimmer-30B",
+ "revision": "a4e59da52a7bc87ae7251dd5545c0dd437c44b68",
+ "examples": {
+  "train": 16,
+  "validation": 2
+ },
+ "steps": [
+  {
+   "step": 1,
+   "epoch": 1,
+   "loss": 0.3416432347790948,
+   "lr": 8.535533905932738e-05,
+   "tokens": 162512,
+   "elapsed_s": 104.7
+  },
+  {
+   "step": 2,
+   "epoch": 1,
+   "loss": 0.259062091246346,
+   "lr": 5e-05,
+   "tokens": 194414,
+   "elapsed_s": 214.3
+  }
+ ],
+ "validation": [
+  {
+   "step": 0,
+   "loss": 0.2868096073971519
+  },
+  {
+   "step": 2,
+   "loss": 0.2059317955368131
+  }
+ ],
+ "peak_gpu_mib": 66133,
+ "train_seconds": 221.1,
+ "tokens_per_s": 1614
+}

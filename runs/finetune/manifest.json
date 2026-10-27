@@ -1,0 +1,16 @@
+{
+ "source_ranker": "spark-agent-all",
+ "kept": 246,
+ "train": 212,
+ "validation": 34,
+ "skipped": {
+  "wrong_or_unverified": 19,
+  "failed": 2,
+  "not_in_cache": 0,
+  "unfinished": 0
+ },
+ "approx_tokens": {
+  "median": 9587,
+  "max": 26453
+ }
+}

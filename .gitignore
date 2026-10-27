@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 .env
 .DS_Store
+
+# rebuilt from the committed model-call cache by scripts/finetune/build_sft.py
+runs/finetune/*.jsonl
