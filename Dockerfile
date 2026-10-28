@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements-app.txt
 COPY src/ src/
 COPY static/ static/
 COPY runs/replay/ runs/replay/
-COPY runs/detection.jsonl runs/explain_summary.jsonl runs/
+COPY runs/detection.jsonl runs/explain_summary.jsonl runs/trust_summary.jsonl runs/
 
 EXPOSE 8000
 CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]

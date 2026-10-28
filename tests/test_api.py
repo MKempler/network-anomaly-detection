@@ -230,3 +230,10 @@ def test_glimmer_option_is_off_unless_enabled(monkeypatch):
     for name in ("GLIMMER_BASE_URL", "GLIMMER_API_KEY", "MODAL_PROXY_KEY", "MODAL_PROXY_SECRET"):
         monkeypatch.setenv(name, "x")
     assert glimmer_enabled() is True
+
+
+def test_trust_serves_the_latest_clean_test_analysis(client):
+    t = client.get("/api/trust").json()
+    assert t["part"] == "test" and not t["git_dirty"] and t["threshold"] is not None
+    spark = t["results"]["spark/RE2"]
+    assert spark["escalation"]["answered"] + spark["escalation"]["escalated"] == spark["cases"]

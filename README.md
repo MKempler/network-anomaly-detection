@@ -161,6 +161,19 @@ Multi-source BARO is run on RE2 only: it needs RCAEval's log and trace time seri
 - **Investigation over one prompt:** it helps on RE1 (0.844 → 0.951, p = 3e-6) and RE3 (0.741 → 0.975, p = 4e-6). On RE2 a single prompt already scores 0.957; investigating with metrics alone is *worse* (0.901, p = 0.012), and logs and traces bring it back to 0.963 (p = 0.013 against metrics alone). The losses are network faults: with metrics alone the agent gets 0.67 of delay faults and 0.74 of packet-loss faults, and with logs and traces 0.81 and 1.00.
 - **Open weights over hosted:** Spark Open matches hosted Spark on RE2 and RE3 and trails it on RE1 with metrics only (0.893 vs 0.951, p = 0.004).
 
+**When can you trust an answer?** A ranking that is always confident isn't something to act on during an incident. So Epicenter answers only when its first cause passed the verifier and its confidence is at least 0.92, and escalates everything else to a human. The cutoff was fitted on hosted Spark's 267 train-split runs as the most answers that are right 98% of the time, frozen under [`eval-spec-v1.2`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1.2), then applied unchanged to the held-out outages:
+
+| Hosted Spark with escalation | RE1 | RE2 | RE3 | All |
+|---|---:|---:|---:|---:|
+| Answers given | 188 of 225 | 152 of 162 | 70 of 81 | 410 of 468 (88%) |
+| Right when it answers | 98.4% | 98.0% | 100% | 98.5% |
+| Wrong answers (answering everything) | 3 (11) | 3 (6) | 0 (2) | 6 (19) |
+| Handed to a human: wrong / right answers | 8 / 29 | 3 / 7 | 2 / 9 | 13 / 45 |
+
+Escalation has a price: of the 58 outages it hands over, 45 would have been answered correctly. It buys 13 wrong answers avoided, a third as many wrong answers as answering everything.
+
+Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had the true cause at ranks 2–5, 2 named it with evidence the verifier rejected, and 2 examined it without naming it. The verifier rejects 12–17% of all proposed causes, nearly all below first place. A median investigation takes 37–46 s of model time on hosted Spark and costs about $0.006 at the Contributor tier; the fine-tuned Glimmer writes about a third of the output tokens. `python scripts/report_trust.py --part test` reproduces all of it from the recorded runs, including the failure breakdown and cost for every model.
+
 **End to end: our detector chooses where to look.** Here nothing is told the fault time; our detector's flag anchors the investigation, and an outage it never flags is a miss for every method.
 
 | AC@1, detector-anchored | RE1 | RE2 | RE3 |
@@ -192,7 +205,7 @@ Requires Python 3.13 and, for the live lab, Docker.
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python scripts/download_data.py --rcaeval RE1 RE2 RE3   # SMD and RCAEval from Zenodo, MD5-checked
-pytest                                                  # 163 tests: scoring, leakage, tools, lab, API
+pytest                                                  # 168 tests: scoring, leakage, tools, lab, API, trust
 ```
 
 **Every model number, with no network and no API key.** Each model call is recorded in [`runs/llm/`](runs/llm), keyed by a hash of the request, and `--offline` replays a run from that record. The tools recompute their results from the downloaded data, so the verifier re-checks every citation.

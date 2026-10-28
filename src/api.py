@@ -177,6 +177,17 @@ def results(suite: str = Query("RE1"), anchor: str = Query("inject"), part: str 
     return {"suite": suite, "anchor": anchor, "part": part, "rankers": list(latest.values())}
 
 
+@app.get("/api/trust")
+def trust():
+    """The latest trust analysis of the test split recorded from a clean tree (scripts/report_trust.py)."""
+    path = ROOT / "runs" / "trust_summary.jsonl"
+    rows = [json.loads(line) for line in open(path)] if path.exists() else []
+    rows = [r for r in rows if r["part"] == "test" and not r["git_dirty"]]
+    if not rows:
+        raise HTTPException(404, "no trust analysis recorded")
+    return rows[-1]
+
+
 @app.get("/api/runs")
 def runs():
     with Session(app.state.engine) as s:

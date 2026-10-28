@@ -205,6 +205,10 @@ a.btn.solid { color: var(--surface); }
 .evidence { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
 .evidence h1 { font: 600 30px/1.1 var(--cond); letter-spacing: 0.01em; margin: 0 0 8px; }
 .evidence p.lede { color: var(--ink-2); max-width: 720px; margin: 0 0 26px; }
+.evidence h2.ev-h2 { font: 600 22px/1.2 var(--cond); margin: 36px 0 8px; }
+.evidence p.ev-note { margin: -18px 0 30px; max-width: 720px; }
+.scrollx { overflow-x: auto; margin-bottom: 30px; }
+.scrollx .etable { margin-bottom: 0; }
 .etable { width: 100%; border-collapse: collapse; margin-bottom: 30px; table-layout: fixed; }
 .etable col.m { width: 34%; } .etable col.v { width: 17%; } .etable col.b { width: 20%; } .etable col.s { width: 10%; } .etable col.f { width: 9%; }
 .etable caption { text-align: left; padding: 0 0 8px; }
@@ -242,6 +246,8 @@ table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /*
   .etable caption .label { white-space: normal; }
   .etable th { overflow-wrap: normal; }
   .dtable th, .dtable td { padding-left: 7px; padding-right: 7px; }
+  table.ttable td:first-child { min-width: 9.5em; overflow-wrap: normal; }
+  table.ttable th { white-space: normal; }
   .dtable th:first-child, .dtable td:first-child { padding-left: 16px; }
 }
 
@@ -702,6 +708,7 @@ async function renderEvidence() {
     });
     root.append(t);
   }
+  await renderTrust(root).catch(() => {});
   const det = await api("/api/detection");
   const t = el("table", "etable"); t.append(colgroup(["m", "s", "s", "v", "b", "f"])); const cap = el("caption"); cap.append(el("span", "label", "Detection · 28 SMD servers · event-level scoring, no point adjustment")); t.append(cap);
   const head = el("tr"); ["Detector", "Precision", "Recall", "F1", "", "Delay (rows)"].forEach((h, i) => head.append(el("th", i === 4 ? "wide" : null, h))); t.append(head);
@@ -715,6 +722,60 @@ async function renderEvidence() {
     tr.append(el("td", "v", d.mean_delay?.toFixed(1) ?? "–")); t.append(tr);
   });
   root.append(t);
+}
+
+/* Trust: escalation, why misses missed, cost. From runs/trust_summary.jsonl (scripts/report_trust.py). */
+const COST_WHERE = { "spark-open": "set by the host", glimmer: "GPU time (rented here)", "glimmer-tuned": "GPU time (rented here)" };
+const TRUST_AGENTS = [["spark", "Muse Spark agent (hosted)"], ["spark-open", "Spark Open agent"],
+                      ["glimmer", "Glimmer 30B agent"], ["glimmer-tuned", "Glimmer 30B agent, fine-tuned"]];
+function simpleTable(caption, head, rows, cols) {
+  const t = el("table", "etable ttable"); t.append(colgroup(cols));
+  const cap = el("caption"); cap.append(el("span", "label", caption)); t.append(cap);
+  const h = el("tr"); head.forEach((x, i) => h.append(el("th", i ? "num" : null, x))); t.append(h);
+  rows.forEach((r) => { const tr = el("tr"); r.forEach((x, i) => tr.append(el("td", i ? "v num" : null, x))); t.append(tr); });
+  const box = el("div", "scrollx"); box.append(t);   // a phone scrolls the table, never the page
+  return box;
+}
+async function renderTrust(root) {
+  const t = await api("/api/trust"), R = t.results, suites = ["RE1", "RE2", "RE3"];
+  const pct = (x) => (100 * x).toFixed(1) + "%";
+  root.append(el("h2", "ev-h2", "When can you trust an answer?"),
+              el("p", "lede", `Epicenter answers only when its first cause passed the verifier and its confidence is at least ${t.threshold}, ` +
+                 `a cutoff fitted on hosted Spark's ${t.train_runs} train-split runs to be right 98% of the time; everything else goes to a human. ` +
+                 "Below, that rule applied unchanged to the held-out outages."));
+  const esc = suites.map((s) => R[`spark/${s}`]);
+  const sum = (f) => esc.reduce((a, r) => a + f(r), 0);
+  const all = { cases: sum((r) => r.cases), answered: sum((r) => r.escalation.answered), wrong: sum((r) => r.escalation.wrong_answered),
+                wrongAll: sum((r) => Math.round(r.cases * (1 - r.ac1))) };
+  const handed = (cases, answered, wrongAll, wrong) => `${wrongAll - wrong} / ${cases - answered - (wrongAll - wrong)}`;
+  const col = (r) => { const wrongAll = Math.round(r.cases * (1 - r.ac1));
+    return [`${r.escalation.answered} of ${r.cases}`, pct(r.escalation.ac1_answered), `${r.escalation.wrong_answered} (vs ${wrongAll})`,
+            handed(r.cases, r.escalation.answered, wrongAll, r.escalation.wrong_answered)]; };
+  const cols = esc.map(col), total = [`${all.answered} of ${all.cases}`, pct((all.answered - all.wrong) / all.answered), `${all.wrong} (vs ${all.wrongAll})`,
+                                      handed(all.cases, all.answered, all.wrongAll, all.wrong)];
+  root.append(simpleTable("Hosted Spark with escalation · held-out test outages", ["", "RE1", "RE2", "RE3", "All"],
+    ["Answers given", "Right when it answers", "Wrong answers (answering everything)", "Handed to a human: wrong / right"]
+      .map((k, i) => [k, ...cols.map((c) => c[i]), total[i]]), ["m", "s", "s", "s", "s"]));
+  root.append(el("p", "note-sm ev-note", `Escalation has a price: of the ${all.cases - all.answered} outages it hands over, ` +
+    `${all.cases - all.answered - (all.wrongAll - all.wrong)} would have been answered correctly. It buys ${all.wrongAll - all.wrong} wrong answers avoided.`));
+  const kinds = [["named it at rank 2-5", "True cause ranked 2-5"], ["named it, evidence rejected", "Named it, evidence rejected"],
+                 ["examined it, not named", "Examined it, didn't name it"], ["never examined it", "Never examined it"], ["no ranking", "No ranking submitted"]];
+  root.append(simpleTable("Why the misses missed · all 468 test outages", ["Agent", "Misses", ...kinds.map((k) => k[1])],
+    TRUST_AGENTS.filter(([k]) => R[`${k}/RE1`]).map(([k, label]) => {
+      const f = (kind) => suites.reduce((a, s) => a + (R[`${k}/${s}`]?.failures[kind] || 0), 0);
+      return [label, kinds.reduce((a, [kind]) => a + f(kind), 0), ...kinds.map(([kind]) => f(kind))];
+    }), ["m", "s", "s", "s", "s", "s", "s"]));
+  const range = (vals) => { const v = vals.filter((x) => x != null).map(Math.round); if (!v.length) return "–";
+    const [lo, hi] = [Math.min(...v), Math.max(...v)]; return (lo === hi ? `${lo}` : `${lo}–${hi}`) + " s"; };
+  root.append(simpleTable("Cost per investigation · medians per suite", ["Agent", "Model time", "Output tokens", "Turns", "Contributor-tier cost"],
+    TRUST_AGENTS.filter(([k]) => R[`${k}/RE1`]).map(([k, label]) => {
+      const c = suites.map((s) => R[`${k}/${s}`].cost);
+      const usd = c.map((x) => x.usd_per_investigation_contributor).filter((x) => x != null);
+      return [label, range(c.map((x) => x.model_seconds_median)), range(c.map((x) => x.output_tokens_median)).replace(/ s$/, ""),
+              range(c.map((x) => x.turns_median)).replace(/ s$/, ""), usd.length ? `$${Math.min(...usd).toFixed(4)}–$${Math.max(...usd).toFixed(4)}` : COST_WHERE[k]];
+    }), ["m", "s", "s", "s", "s"]));
+  root.append(el("p", "note-sm ev-note", "Model time is summed across an investigation's model calls; the Glimmer runs shared one rented GPU across up to 48 concurrent investigations. " +
+                 "Hosted Spark is priced at the Meta Model API's Contributor tier; the open models cost whatever their host or GPU costs."));
 }
 
 /* ---- live -------------------------------------------------------------------- */
