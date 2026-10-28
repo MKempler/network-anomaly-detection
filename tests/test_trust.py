@@ -54,3 +54,14 @@ def test_risk_coverage_and_the_fitted_threshold():
     assert fit_threshold(cases, 0.98) == 0.95 and fit_threshold(cases, 0.6) == 0.9
     op = at_threshold(cases, 0.95)
     assert op["answered"] == 2 and op["escalated"] == 2 and op["ac1_answered"] == 1.0 and op["wrong_answered"] == 0
+
+
+def test_a_wrong_pick_is_placed_relative_to_the_true_cause_in_the_call_graph():
+    from src.evaluate_explain import graph_relation
+    graph = [{"caller": "frontend", "callee": "checkoutservice"}, {"caller": "checkoutservice", "callee": "paymentservice"},
+             {"caller": "frontend", "callee": "adservice"}]
+    assert graph_relation(graph, "checkoutservice", "paymentservice") == "upstream victim"
+    assert graph_relation(graph, "frontend", "paymentservice") == "upstream victim"        # through checkout
+    assert graph_relation(graph, "paymentservice", "checkoutservice") == "downstream of the cause"
+    assert graph_relation(graph, "adservice", "paymentservice") == "unconnected"
+    assert graph_relation([], "frontend", "paymentservice") == "no traces"

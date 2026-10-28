@@ -251,3 +251,34 @@ def trust_summary(cases: list[TrustCase]) -> dict:
         "failures": {k: sum(c.failure == k for c in cases) for k in FAILURES},
         "risk_coverage": risk_coverage(cases),
     }
+
+
+# ---- where a wrong first pick sits relative to the true cause (added after eval-spec-v1.2) ----
+# Post-hoc counting on recorded runs; it re-scores nothing. In the call graph recorded from an outage's
+# own traces, a wrong first pick that calls the true cause, directly or through other services, is a
+# victim: it looks broken because something it depends on broke. "no traces" when there is no graph.
+
+def graph_relation(graph: list[dict], wrong: str, truth: str) -> str:
+    """'upstream victim', 'downstream of the cause', 'unconnected' or 'no traces'."""
+    if not graph:
+        return "no traces"
+    wrong, truth = service_of_item(wrong), service_of_item(truth)
+
+    def reaches(start: str, goal: str) -> bool:      # start calls goal, directly or through others
+        seen, stack = {start}, [start]
+        while stack:
+            node = stack.pop()
+            for e in graph:
+                if service_of_item(e["caller"]) == node:
+                    nxt = service_of_item(e["callee"])
+                    if nxt == goal:
+                        return True
+                    if nxt not in seen:
+                        seen.add(nxt)
+                        stack.append(nxt)
+        return False
+    if reaches(wrong, truth):
+        return "upstream victim"
+    if reaches(truth, wrong):
+        return "downstream of the cause"
+    return "unconnected"
