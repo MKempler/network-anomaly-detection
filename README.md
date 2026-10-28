@@ -184,7 +184,7 @@ Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had th
 | Noisy metrics (noise at half each metric's normal spread) | 0.969 | 0.994 | 2 gained, 1 lost, p = 1.0 |
 | Alarm 60 s late | 0.944 | 0.969 | 2 gained, 5 lost, p = 0.45 |
 
-No degradation causes a significant drop; at 162 outages that rules out large drops, not small ones, and the late alarm costs the most. Read with the ladder above, logs and traces stand in for each other: removing both drops AC@1 to 0.901 (p = 0.012), while removing either one alone does not. One of the two is enough for the network faults that metrics miss.
+No degradation causes a significant drop; at 162 outages that rules out large drops, not small ones, and the late alarm costs the most. Logs and traces stand in for each other: removing either one alone causes no significant drop, while removing both does. The remove-both figure is the ladder's existing metrics-only rung (same model, prompts and tools, run under `eval-spec-v1`, not a fresh v1.3 run), at 0.901 AC@1 against 0.963 (p = 0.012). One of the two is enough for the network faults that metrics miss.
 
 **End to end: our detector chooses where to look.** Here nothing is told the fault time; our detector's flag anchors the investigation, and an outage it never flags is a miss for every method.
 
@@ -217,7 +217,7 @@ Requires Python 3.13 and, for the live lab, Docker.
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python scripts/download_data.py --rcaeval RE1 RE2 RE3   # SMD and RCAEval from Zenodo, MD5-checked
-pytest                                                  # 176 tests: scoring, leakage, tools, lab, API, trust
+pytest                                                  # 177 tests: scoring, leakage, tools, lab, API, trust, robustness
 ```
 
 **Every model number, with no network and no API key.** Each model call is recorded in [`runs/llm/`](runs/llm), keyed by a hash of the request, and `--offline` replays a run from that record. The tools recompute their results from the downloaded data, so the verifier re-checks every citation.
