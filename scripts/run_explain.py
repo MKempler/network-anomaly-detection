@@ -13,6 +13,9 @@ Rankers:
 - spark-agent-all: tool-using investigation with logs and traces where the case has them
 - open-one-shot, open-agent, open-agent-all: the same three on Muse Spark Open, Meta's
   open-weight model, served by Baseten; only the model and provider change
+- spark-agent-nologs, spark-agent-notraces, spark-agent-noisy, spark-agent-late: the all-sources
+  hosted agent with one natural degradation each (src/robustness.py): logs removed, traces removed,
+  metrics with noise, or the investigation starting a minute after the fault
 - glimmer-agent-all, glimmer-tuned-agent-all: the all-sources agent on Muse Glimmer
   (30B, open weights) before and after fine-tuning on hosted Spark's verified
   train-split investigations (scripts/finetune/)
@@ -49,6 +52,7 @@ from src.explain import no_ai_ranking, spark_one_shot  # noqa: E402
 from src.llm import PROVIDERS, client  # noqa: E402
 from src.load_rcaeval import case_index, load_case, load_labels  # noqa: E402
 from src.provenance import git_state  # noqa: E402
+from src.robustness import LATE_ALARM_S, add_noise  # noqa: E402
 from src.splits import case_ids  # noqa: E402
 from src.tools import Investigation  # noqa: E402
 
@@ -61,6 +65,11 @@ LLM_RANKERS = {
     "open-one-shot": ("one-shot", "baseten", None),
     "open-agent": ("agent", "baseten", frozenset({"metrics"})),
     "open-agent-all": ("agent", "baseten", frozenset({"metrics", "logs", "traces"})),
+    # robustness (eval-spec-v1.3): hosted Spark, all sources, with one natural degradation each
+    "spark-agent-nologs": ("agent", "meta", frozenset({"metrics", "traces"})),
+    "spark-agent-notraces": ("agent", "meta", frozenset({"metrics", "logs"})),
+    "spark-agent-noisy": ("agent", "meta", frozenset({"metrics", "logs", "traces"})),
+    "spark-agent-late": ("agent", "meta", frozenset({"metrics", "logs", "traces"})),
     "glimmer-agent-all": ("agent", "glimmer", frozenset({"metrics", "logs", "traces"})),
     "glimmer-tuned-agent-all": ("agent", "glimmer-tuned", frozenset({"metrics", "logs", "traces"})),
 }
@@ -72,7 +81,12 @@ def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:
     if anchor is None:
         return {"case_id": case_id, "services": None, "causes": [], "error": "detector never flagged",
                 "usage": {}, "turns": None, "seconds": 0.0, "trail": []}
-    inv = Investigation(load_case(suite, case_id, case_dir), anchor, DEFAULT.investigation)
+    case = load_case(suite, case_id, case_dir)
+    if ranker == "spark-agent-noisy":
+        case = add_noise(case, anchor, DEFAULT.investigation.baseline_s)
+    if ranker == "spark-agent-late":
+        anchor = anchor + LATE_ALARM_S
+    inv = Investigation(case, anchor, DEFAULT.investigation)
     started = time.time()
     trail, turns = [], None
     if ranker == "no-ai":
