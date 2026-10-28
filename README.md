@@ -172,7 +172,7 @@ Multi-source BARO is run on RE2 only: it needs RCAEval's log and trace time seri
 
 Escalation has a price: of the 58 outages it hands over, 45 would have been answered correctly. It buys 13 wrong answers avoided, a third as many wrong answers as answering everything.
 
-Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had the true cause at ranks 2–5, 2 named it with evidence the verifier rejected, and 2 examined it without naming it. They are rarely victims of the true cause: where the outage's recorded call graph lets us check (4 of the 19), only 1 wrong first pick sat upstream of the true cause; 3 were off its call path entirely. End to end, detection dominates: of 113 misses when our detector chooses where to look, 89 are outages it never flagged (52 of them on RE3) and 24 are wrong diagnoses after a flag. `python scripts/report_misses.py` reproduces these counts. The verifier rejects 12–17% of all proposed causes, nearly all below first place. A median investigation takes 37–46 s of model time on hosted Spark and costs about $0.006 at the Contributor tier; the fine-tuned Glimmer writes about a third of the output tokens. `python scripts/report_trust.py --part test` reproduces all of it from the recorded runs, including the failure breakdown and cost for every model.
+Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had the true cause at ranks 2–5, 2 named it with evidence the verifier rejected, and 2 examined it without naming it. In the 4 of those 19 where a recorded call graph exists to check, only 1 wrong first pick sat upstream of the true cause (a victim of it) and 3 were off its call path entirely; with 4 cases that is a hint, not proof, and the other 15 can't be checked. End to end, detection dominates: of 113 misses when our detector chooses where to look, 89 are outages it never flagged (52 of them on RE3) and 24 are wrong diagnoses after a flag. `python scripts/report_misses.py` reproduces these counts. The verifier rejects 12–17% of all proposed causes, nearly all below first place. A median investigation takes 37–46 s of model time on hosted Spark and costs about $0.006 at the Contributor tier; the fine-tuned Glimmer writes about a third of the output tokens. `python scripts/report_trust.py --part test` reproduces all of it from the recorded runs, including the failure breakdown and cost for every model.
 
 **End to end: our detector chooses where to look.** Here nothing is told the fault time; our detector's flag anchors the investigation, and an outage it never flags is a miss for every method.
 
@@ -205,7 +205,7 @@ Requires Python 3.13 and, for the live lab, Docker.
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python scripts/download_data.py --rcaeval RE1 RE2 RE3   # SMD and RCAEval from Zenodo, MD5-checked
-pytest                                                  # 168 tests: scoring, leakage, tools, lab, API, trust
+pytest                                                  # 176 tests: scoring, leakage, tools, lab, API, trust
 ```
 
 **Every model number, with no network and no API key.** Each model call is recorded in [`runs/llm/`](runs/llm), keyed by a hash of the request, and `--offline` replays a run from that record. The tools recompute their results from the downloaded data, so the verifier re-checks every citation.
