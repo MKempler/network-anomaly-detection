@@ -55,6 +55,7 @@ class Incident:
     trail: list = field(default_factory=list)      # the agent's steps, so live incidents can be replayed
     handoff: dict = field(default_factory=dict)    # ticket note and customer update drafts
     model: str = DEFAULT_MODEL                     # which model investigates
+    graph: list = field(default_factory=list)      # calls seen in the traces, for the blast radius
 
     def public(self) -> dict:
         d = asdict(self)
@@ -269,6 +270,10 @@ class Lab:
             self.publish({"type": "step", "id": incident.id, "step": step})
 
         run = self.investigate(inv, on_step=on_step, model=incident.model)
+        try:
+            incident.graph = inv.call_graph()
+        except Exception:   # the graph only feeds a display; never lose the diagnosis over it
+            incident.graph = []
         incident.causes = run.ranking.causes
         services = ranked_services(run.ranking.services or [])
         incident.verdict = {"detected": True, "investigated": True, "error": run.ranking.error,

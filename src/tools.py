@@ -277,6 +277,13 @@ class Investigation:
                            .reset_index().sort_values("calls", ascending=False))
         return self._edges
 
+    def call_graph(self) -> list[dict]:
+        """Every cross-service call seen in the traces, for display (blast radius); [] without traces."""
+        if "traces" not in self.case.sources:
+            return []
+        return [{"caller": r.service_parent, "callee": r.service, "calls": int(r.calls)}
+                for r in self._call_graph().itertuples()]
+
     def get_dependencies(self, service: str) -> dict:
         if "traces" not in self.case.sources:
             return {"error": "this case has no traces"}

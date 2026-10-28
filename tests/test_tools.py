@@ -156,3 +156,15 @@ def test_dispatch_records_calls_and_reports_bad_requests(inv):
     for record in (unknown_tool, unknown_service, bad_args, unknown_metric):
         assert "error" in record.result and record.evidence == []
     assert json.loads(inv.output(ok))["call_id"] == "c1"
+
+
+def test_call_graph_lists_cross_service_calls_and_is_empty_without_traces():
+    import pandas as pd
+    from types import SimpleNamespace
+    from src.tools import Investigation
+    inv = Investigation.__new__(Investigation)
+    inv.case = SimpleNamespace(sources=frozenset({"metrics"}))
+    assert inv.call_graph() == []
+    inv.case = SimpleNamespace(sources=frozenset({"metrics", "traces"}))
+    inv._edges = pd.DataFrame({"service_parent": ["frontend"], "service": ["cartservice"], "calls": [7]})
+    assert inv.call_graph() == [{"caller": "frontend", "callee": "cartservice", "calls": 7}]

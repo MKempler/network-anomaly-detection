@@ -62,6 +62,7 @@ def build(suite: str, ranker: str) -> list[dict]:
             "window": {"baseline_s": inv.cfg.baseline_s, "window_s": inv.cfg.window_s},
             "series": [{"metric": m, "service": case.services[m], "points": series(inv, m)} for m in metrics],
             "trail": rec["trail"], "causes": rec["causes"], "error": rec["error"],
+            "graph": inv.call_graph(), "evidence_threshold": inv.cfg.evidence_threshold,
             "turns": rec["turns"], "usage": rec["usage"],
             "others": {
                 "no-ai": ranked_services(control[case_id]["services"] or [])[:5] if case_id in control else None,
