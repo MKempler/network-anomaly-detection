@@ -174,6 +174,18 @@ Escalation has a price: of the 58 outages it hands over, 45 would have been answ
 
 Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had the true cause at ranks 2–5, 2 named it with evidence the verifier rejected, and 2 examined it without naming it. In the 4 of those 19 where a recorded call graph exists to check, only 1 wrong first pick sat upstream of the true cause (a victim of it) and 3 were off its call path entirely; with 4 cases that is a hint, not proof, and the other 15 can't be checked. End to end, detection dominates: of 113 misses when our detector chooses where to look, 89 are outages it never flagged (52 of them on RE3) and 24 are wrong diagnoses after a flag. `python scripts/report_misses.py` reproduces these counts. The verifier rejects 12–17% of all proposed causes, nearly all below first place. A median investigation takes 37–46 s of model time on hosted Spark and costs about $0.006 at the Contributor tier; the fine-tuned Glimmer writes about a third of the output tokens. `python scripts/report_trust.py --part test` reproduces all of it from the recorded runs, including the failure breakdown and cost for every model.
 
+**Robustness to messy telemetry.** Real telemetry is often incomplete, so the all-sources hosted agent was re-run on RE2's 162 test outages with one natural degradation at a time, applied before the investigation starts. The conditions were frozen as [`eval-spec-v1.3`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1.3) before any test run.
+
+| RE2 · 162 test outages | AC@1 | AC@3 | Against full input (paired McNemar, AC@1) |
+|---|---:|---:|---|
+| Full input: metrics, logs, traces | 0.963 | 0.988 | — |
+| Logs removed | 0.957 | 0.994 | 2 gained, 3 lost, p = 1.0 |
+| Traces removed (and with them the call graph) | 0.963 | 0.975 | 3 gained, 3 lost, p = 1.0 |
+| Noisy metrics (noise at half each metric's normal spread) | 0.969 | 0.994 | 2 gained, 1 lost, p = 1.0 |
+| Alarm 60 s late | 0.944 | 0.969 | 2 gained, 5 lost, p = 0.45 |
+
+No degradation causes a significant drop; at 162 outages that rules out large drops, not small ones, and the late alarm costs the most. Read with the ladder above, logs and traces stand in for each other: removing both drops AC@1 to 0.901 (p = 0.012), while removing either one alone does not. One of the two is enough for the network faults that metrics miss.
+
 **End to end: our detector chooses where to look.** Here nothing is told the fault time; our detector's flag anchors the investigation, and an outage it never flags is a miss for every method.
 
 | AC@1, detector-anchored | RE1 | RE2 | RE3 |
