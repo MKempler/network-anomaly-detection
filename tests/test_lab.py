@@ -141,9 +141,11 @@ class FakeTelemetry:
 class FakeInjector:
     def __init__(self, telemetry, clock): self.telemetry, self.clock, self.log = telemetry, clock, []
     def inject(self, service, fault):
-        self.telemetry.fault_at = self.clock(); self.log.append(("inject", service, fault)); return (service, fault)
+        from src.lab.faults import ActiveFault
+        self.telemetry.fault_at = self.clock(); self.log.append(("inject", service, fault))
+        return ActiveFault(service, fault)
     def revert(self, active):
-        self.telemetry.fault_at = None; self.log.append(("revert",) + active)
+        self.telemetry.fault_at = None; self.log.append(("revert", active.service, active.fault))
 
 
 class Run:
@@ -200,7 +202,7 @@ def test_phases_are_published_in_order(tmp_path):
         e = q.get_nowait()
         if e["type"] == "phase":
             phases.append(e["incident"]["phase"])
-    assert phases == ["settling", "injected", "alarm", "investigating", "diagnosed", "recovered"]
+    assert phases == ["settling", "injected", "alarm", "investigating", "diagnosed", "fixing", "recovered"]
 
 
 def test_wrong_top_pick_scores_a_miss(tmp_path):
@@ -330,3 +332,67 @@ def test_model_caps_survive_a_restart(tmp_path):
     lab.run(lab.waiting.popleft())
     again, _, _ = make_lab(tmp_path, models={"spark-open": None, "glimmer-tuned": 2})
     assert again.models_left()["glimmer-tuned"] == 1
+
+
+
+def approving_sleep(lab):
+    """A sleep that approves the proposed rollback as soon as one is waiting, as a human would."""
+    plain = lab.sleep
+    def sleep(seconds):
+        if lab.current is not None and lab.current.remediation.get("status") == "proposed":
+            assert lab.approve(lab.current.id)
+        plain(seconds)
+    return sleep
+
+
+def test_a_right_diagnosis_gets_a_rollback_that_a_human_approves_and_recovery_is_verified(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    lab.sleep = approving_sleep(lab)
+    incident = lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    r = incident.remediation
+    assert r["target"] == "cartservice" and r["change"] == "delay" and r["status"] == "approved" and r["approved"]
+    assert r["recovered_s"] is not None and r["recovered_s"] <= lab.cfg.recovery_timeout_s
+    assert inj.log.count(("revert", "cartservice", "delay")) == 1          # rolled back once, by the approval
+
+
+def test_without_approval_the_lab_rolls_back_itself_after_the_timeout(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    incident = lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    r = incident.remediation
+    assert r["status"] == "timed out" and not r["approved"] and r["recovered_s"] is not None
+    assert inj.log.count(("revert", "cartservice", "delay")) == 1
+
+
+def test_a_wrong_diagnosis_gets_no_rollback_and_the_lab_restores_the_service(tmp_path):
+    lab, inj, seen = make_lab(tmp_path, top=("frontend", "cartservice"))
+    q = lab.watch()
+    incident = lab.submit("cartservice", "delay", "1.2.3.4")
+    lab.run(lab.waiting.popleft())
+    assert incident.remediation["status"] == "none" and "no recorded change on frontend" in incident.remediation["reason"]
+    phases = []
+    while not q.empty():
+        e = q.get_nowait()
+        if e["type"] == "phase":
+            phases.append(e["incident"]["phase"])
+    assert "fixing" not in phases and inj.log[-1] == ("revert", "cartservice", "delay")
+
+
+def test_approval_only_counts_for_the_incident_awaiting_it(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    assert lab.approve("nothing-running") is False
+
+
+
+def test_an_incident_leaving_the_queue_is_announced(tmp_path):
+    lab, inj, seen = make_lab(tmp_path)
+    lab.submit("cartservice", "delay", "1.2.3.4")
+    q = lab.watch()
+    lab.run = lambda incident: (_ for _ in ()).throw(KeyboardInterrupt)   # stop right after the pop
+    try:
+        lab.run_forever()
+    except KeyboardInterrupt:
+        pass
+    events = [q.get_nowait() for _ in range(q.qsize())]
+    assert {"type": "queue", "queue": []} in events

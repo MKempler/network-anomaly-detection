@@ -31,7 +31,7 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.anchor import sustained_flag
+from src.anchor import abnormal_rows, sustained_flag
 from src.config import DEFAULT
 from src.evaluate_explain import ranked_services
 from src.lab.faults import FAULTS, TARGETS
@@ -56,6 +56,7 @@ class Incident:
     handoff: dict = field(default_factory=dict)    # ticket note and customer update drafts
     model: str = DEFAULT_MODEL                     # which model investigates
     graph: list = field(default_factory=list)      # calls seen in the traces, for the blast radius
+    remediation: dict = field(default_factory=dict)  # the proposed rollback, whether a human approved, recovery
 
     def public(self) -> dict:
         d = asdict(self)
@@ -73,6 +74,7 @@ class Lab:
         self.cfg = cfg or DEFAULT.live
         self.records, self.clock, self.sleep = Path(records), clock, sleep
         self.model_uses = self._uses_today()      # read back from the records, so a restart keeps the caps
+        self.approved: set[str] = set()
         self.waiting: deque[Incident] = deque()
         self.current: Incident | None = None
         self.last_request: dict[str, float] = {}
@@ -179,6 +181,7 @@ class Lab:
             if incident is None:
                 self.sleep(1)
                 continue
+            self.publish({"type": "queue", "queue": self.queue_view()})   # it left the queue: watchers update
             self.run(incident)
 
     def _budget_left(self) -> bool:
@@ -201,6 +204,7 @@ class Lab:
 
         active = self.injector.inject(incident.service, incident.fault)
         self._phase(incident, "injected")
+        rolled_back = False
         try:
             alarm = self._await_alarm(history, history_end)
             if alarm is None:
@@ -214,12 +218,73 @@ class Lab:
                 while self.clock() < alarm + cfg.window_s:
                     self.sleep(1)
                 self._diagnose(incident, history_end, alarm)
+                rolled_back = self._remediate(incident, active, history)
         finally:
-            self.injector.revert(active)
+            if not rolled_back:            # nothing approved or proposed: the lab restores the service itself
+                self.injector.revert(active)
             self.last_recovered = self.clock()
             self._phase(incident, "recovered")
             self.current = None
             self._record(incident)
+
+    # -- remediation ----------------------------------------------------------------
+    # The lab's change log is the fault it applied, the way a deploy history records changes. A rollback
+    # is proposed only when the diagnosed service has a recorded change; it runs only on a human's approval
+    # (or, after approval_timeout_s, as the lab's own restore), and recovery is verified by the alarm rule.
+
+    def approve(self, incident_id: str) -> bool:
+        """A human approves the proposed rollback for the incident awaiting it."""
+        with self._lock:
+            current = self.current
+            if current is None or current.id != incident_id or current.remediation.get("status") != "proposed":
+                return False
+            self.approved.add(incident_id)
+            return True
+
+    def _remediate(self, incident: Incident, active, history) -> bool:
+        """Propose, await approval, roll back and verify. Returns whether this rolled the fault back."""
+        cause = incident.causes[0] if incident.causes else None
+        changes = {active.service: active.fault}      # the change log: what the lab changed, and how
+        if cause is None or cause.get("verified") is False:
+            incident.remediation = {"status": "none", "reason": "no verified diagnosis to act on"}
+            return False
+        target = cause["service"]
+        if target not in changes:
+            incident.remediation = {"status": "none", "target": target,
+                                    "reason": f"no recorded change on {target}, so nothing safe to roll back"}
+            return False
+        incident.remediation = {"status": "proposed", "action": "rollback", "target": target,
+                                "change": changes[target], "change_description": FAULTS[changes[target]],
+                                "approval_timeout_s": self.cfg.approval_timeout_s}
+        self._phase(incident, "fixing")
+        deadline = self.clock() + self.cfg.approval_timeout_s
+        while self.clock() < deadline and incident.id not in self.approved:
+            self.sleep(1)
+        approved = incident.id in self.approved
+        self.approved.discard(incident.id)
+        self.injector.revert(active)
+        fixed_at = self.clock()
+        incident.remediation.update(status="approved" if approved else "timed out", approved=approved,
+                                    rolled_back_at=fixed_at)
+        self.publish({"type": "remediation", "id": incident.id, "remediation": incident.remediation})
+        recovered = self._await_recovery(history, fixed_at)
+        incident.remediation["recovered_s"] = None if recovered is None else round(recovered - fixed_at, 1)
+        self.publish({"type": "remediation", "id": incident.id, "remediation": incident.remediation})
+        return True
+
+    def _await_recovery(self, history, since: float) -> float | None:
+        """When the last persist_s seconds are all normal again, by the alarm's own rule; None on timeout."""
+        cfg = self.cfg
+        while self.clock() < since + cfg.recovery_timeout_s:
+            self.sleep(1)
+            stream = self.telemetry.frame(since, self.clock())
+            columns = [c for c in history.columns if c in stream.columns]
+            if len(stream) < cfg.persist_s or not columns:
+                continue
+            recent = stream[columns].to_numpy()[-cfg.persist_s:]
+            if not abnormal_rows(history[columns].to_numpy(), recent, cfg.threshold_sigma, cfg.rel_std_floor).any():
+                return self.clock()
+        return None
 
     def _run_alert(self, incident: Incident):
         """An external alert: wait for the evidence window after its start, then investigate."""

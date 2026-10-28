@@ -18,6 +18,7 @@ the shared live system:
 - GET  /api/live/menu, GET /api/live/state    the fault menu; current incident,
                                               queue and public tally
 - POST /api/live/break                        join the queue with one fault (and which model investigates)
+- POST /api/live/approve                      a human approves the rollback proposed after a diagnosis
 - GET  /api/live/events                       Server-Sent Events: phases, agent
                                               steps, and a metrics tick per second
 - POST /api/live/feedback                     a vote and optional comment
@@ -305,6 +306,19 @@ def live_break(body: BreakRequest, request: Request):
     except (OverflowError, PermissionError) as error:
         raise HTTPException(429, str(error))
     return {"id": incident.id, "position": len(lab.queue_view())}
+
+
+class Approval(BaseModel):
+    incident_id: str = Field(max_length=32)
+
+
+@app.post("/api/live/approve")
+def live_approve(body: Approval, request: Request):
+    """A human approves the rollback proposed for the incident being diagnosed (lab faults only)."""
+    lab = _lab(request)
+    if not lab.approve(body.incident_id):
+        raise HTTPException(409, "no rollback is awaiting approval for that incident")
+    return {"approved": body.incident_id}
 
 
 @app.get("/api/live/events")

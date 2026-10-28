@@ -237,3 +237,9 @@ def test_trust_serves_the_latest_clean_test_analysis(client):
     assert t["part"] == "test" and not t["git_dirty"] and t["threshold"] is not None
     spark = t["results"]["spark/RE2"]
     assert spark["escalation"]["answered"] + spark["escalation"]["escalated"] == spark["cases"]
+
+
+
+def test_approving_when_nothing_awaits_is_refused(client, live):
+    r = client.post("/api/live/approve", json={"incident_id": "abc"})
+    assert r.status_code == 409

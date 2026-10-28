@@ -98,6 +98,10 @@ class Live:
     # when LIVE_GLIMMER=1 and the endpoint is configured; capped per day because each run can keep an H200
     # up for 5-10 minutes (about $0.35-0.75).
     glimmer_daily: int = 5
+    # After a diagnosis, a proposed rollback waits this long for a human to approve it; then the lab
+    # restores the service itself. Recovery is verified by the alarm rule for up to recovery_timeout_s.
+    approval_timeout_s: int = 45
+    recovery_timeout_s: int = 120
 
 
 @dataclass(frozen=True)

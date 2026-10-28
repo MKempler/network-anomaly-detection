@@ -127,6 +127,8 @@ table.verdict:empty + .hint { display: block; }
 .verdict .stamp.ok { color: var(--ok); } .verdict .stamp.bad { color: var(--signal); }
 .verdict .cite { font: 400 11px var(--mono); color: var(--ink-3); margin-left: 6px; cursor: pointer; border-bottom: 1px solid var(--rule-strong); }
 .verdict tr.truth td { box-shadow: inset 2px 0 0 var(--ok); }
+.fix-text { margin: 0 0 10px; font-size: 13px; }
+.fix-text b { font-weight: 500; }
 .verdict tr.status td { padding: 2px 0 10px; border-bottom: 1px solid var(--rule-strong); }
 .verdict .answer { font: 600 11px/1.4 var(--cond); letter-spacing: 0.08em; text-transform: uppercase; }
 .verdict .answer.ok { color: var(--ok); } .verdict .answer.esc { color: var(--signal); }
@@ -337,6 +339,15 @@ table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /*
     <div class="col">
       <div class="block"><h3 class="label">Flight log</h3></div>
       <div class="log scroll" id="live-log" aria-live="polite" style="max-height:46vh" data-empty="Waiting for an outage. Break a service on the left, or watch the next one in the queue: every tool call the agent makes appears here."></div>
+      <div class="block" id="live-fix-block" hidden>
+        <h3 class="label" id="fix-title">Proposed fix · needs a human</h3>
+        <p class="fix-text" id="fix-text"></p>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <button class="btn signal" id="fix-approve">Approve rollback</button>
+          <span class="mono" id="fix-msg" role="status"></span>
+        </div>
+        <p class="note-sm" id="fix-note"></p>
+      </div>
       <div class="block"><h3 class="label">Verdict</h3><table class="verdict" id="live-verdict"></table><p class="hint">The ranked causes appear here once the agent finishes.</p>
         <div id="live-feedback" class="row-btns" hidden>
           <button class="btn" data-vote="up">Useful</button><button class="btn" data-vote="down">Not useful</button>
@@ -455,7 +466,7 @@ const RANKERS = { "baro": "BARO", "nsigma": "N-Sigma", "mmbaro": "Multi-source B
 const PUBLISHED = new Set(["baro", "nsigma", "mmbaro"]);
 const TAG = { top_deviations: "MET", compare_to_baseline: "MET", get_metric_window: "MET", get_logs: "LOG",
               get_trace_errors: "TRC", get_dependencies: "DEP" };
-const PHASES = ["queued", "settling", "injected", "alarm", "investigating", "diagnosed", "recovered"];
+const PHASES = ["queued", "settling", "injected", "alarm", "investigating", "diagnosed", "fixing", "recovered"];
 const REPLAY_PHASES = ["baseline", "alarm", "investigating", "diagnosed"];
 
 /* ---- theme ---------------------------------------------------------------- */
@@ -881,7 +892,7 @@ async function renderTrust(root) {
 }
 
 /* ---- live -------------------------------------------------------------------- */
-const live = { incident: null, rows: [], start: null, feedbackFor: null };
+const live = { incident: null, rows: [], start: null, feedbackFor: null, fixTimer: null, recoveryLimit: 120 };
 const clockOf = (base) => (t) => { const s = t - base; return (s < 0 ? "−" : "+") + Math.floor(Math.abs(s) / 60) + ":" + String(Math.floor(Math.abs(s) % 60)).padStart(2, "0"); };
 const LIVE_METRICS = ["frontend_latency", "checkoutservice_latency", "cartservice_cpu", "currencyservice_latency",
                       "productcatalogservice_latency", "recommendationservice_latency", "paymentservice_latency", "shippingservice_latency"];
@@ -956,7 +967,7 @@ function applyIncident(inc) {
   if (!live.incident || live.incident.id !== inc.id) {
     showModel(inc.model);
     live.incident = inc; $("#live-log").replaceChildren(); $("#live-verdict").replaceChildren(); $("#live-feedback").hidden = true;
-    $("#live-handoff-block").hidden = true;
+    $("#live-handoff-block").hidden = true; $("#live-fix-block").hidden = true; clearInterval(live.fixTimer);
     logLine("live-log", "", "SYS", inc.source === "alertmanager" ? `incident ${inc.id} · Alertmanager fired: ${inc.fault}`
                                                                  : `incident ${inc.id} · someone broke ${inc.service} with “${inc.fault}” · ${modelName(inc.model)} investigates`, "sys");
   }
@@ -970,19 +981,62 @@ function onLiveEvent(e) {
   else if (e.type === "phase") {
     applyIncident(e.incident); const inc = e.incident, stamp = clockOf(live.start)(inc.times[inc.phase] || Date.now() / 1000);
     const text = { settling: "letting the system settle", injected: "fault injected · the investigator is not told", alarm: `alarm raised after ${e.detect_s}s`,
-                   missed: "no alarm: the detector missed this one", investigating: "investigation starts", recovered: "fault reverted · system recovering" }[inc.phase];
+                   missed: "no alarm: the detector missed this one", investigating: "investigation starts", recovered: "incident closed" }[inc.phase];
     if (inc.phase === "diagnosed") { renderVerdict("live-verdict", inc.causes, inc.verdict.error,
       { trail: inc.trail, graph: inc.graph, system: "OB", threshold: 3, log: "live-log", barNote: " (fitted on hosted Spark)" }); const v = inc.verdict;
       logLine("live-log", stamp, "SYS", v.investigated ? (v.top1 ? `correct: ${inc.service} ranked first` : v.top3 ? `close: ${inc.service} in the top 3` : `missed: ${inc.service} not in the top 3`) : (e.note || "not investigated"), v.top1 ? "sys" : "alarm");
       live.feedbackFor = inc.id; $("#live-feedback").hidden = false; }
+    else if (inc.phase === "fixing") { renderFix(inc);
+      logLine("live-log", stamp, "SYS", `fix proposed: roll back the latest change to ${inc.remediation.target} · waiting for a human`, "sys"); }
     else if (text) logLine("live-log", stamp, "SYS", text, inc.phase === "alarm" || inc.phase === "missed" ? "alarm" : "sys");
+    if (inc.phase === "recovered") renderFix(inc);
     drawLive();
+  } else if (e.type === "remediation" && live.incident && e.id === live.incident.id) {
+    const r = e.remediation, now = clockOf(live.start)(Date.now() / 1000);
+    renderFix({ ...live.incident, remediation: r });
+    if (r.recovered_s === undefined) logLine("live-log", now, "SYS", r.approved ? "rollback approved by a human · applied" : "no approval in time · the lab rolled it back itself", "sys");
+    else logLine("live-log", now, "SYS", r.recovered_s === null ? `not back to normal within ${live.recoveryLimit} s` : `recovered: back to normal ${r.recovered_s} s after the rollback (checked by the alarm rule)`, r.recovered_s === null ? "alarm" : "sys");
   } else if (e.type === "step" && live.incident && e.id === live.incident.id) logStep("live-log", e.step, clockOf(live.start)(Date.now() / 1000));
   else if (e.type === "handoff" && live.incident && e.id === live.incident.id) {
     $("#live-handoff-block").hidden = false; $("#slack-preview").hidden = true; renderHandoff("live-handoff", e.handoff);
     logLine("live-log", clockOf(live.start)(Date.now() / 1000), "SYS", "handoff drafted: ticket note and customer update", "sys");
   }
 }
+function renderFix(inc) {
+  const r = inc.remediation || {}, block = $("#live-fix-block"), btn = $("#fix-approve"), msg = $("#fix-msg"), note = $("#fix-note");
+  if (!r.status) return;
+  block.hidden = false; clearInterval(live.fixTimer);
+  if (r.status === "none") {
+    $("#fix-title").textContent = "No fix proposed";
+    $("#fix-text").textContent = `${r.reason[0].toUpperCase()}${r.reason.slice(1)}: escalate to a human.`;
+    btn.hidden = true; msg.textContent = ""; note.textContent = "The lab restores the shop itself so the next outage can run.";
+    return;
+  }
+  $("#fix-title").textContent = "Proposed fix · needs a human";
+  const t = $("#fix-text"); t.replaceChildren(document.createTextNode("Roll back the latest change to "), el("b", null, r.target),
+    document.createTextNode(`: ${r.change_description.replace(/^./, (c) => c.toLowerCase())}.`));
+  if (r.status === "proposed") {
+    btn.hidden = false; btn.disabled = false; msg.textContent = "";
+    const until = (inc.times.fixing || Date.now() / 1000) + r.approval_timeout_s;
+    const tick = () => { const left = Math.max(0, Math.round(until - Date.now() / 1000));
+      note.textContent = `Only the lab's own change can be rolled back. If nobody approves within ${left} s, the lab restores it itself.`; };
+    tick(); live.fixTimer = setInterval(tick, 1000);
+    block.scrollIntoView({ block: "nearest", behavior: "smooth" });   // a 45-second decision must be in view
+    return;
+  }
+  btn.hidden = true;
+  msg.textContent = r.approved ? "Rolled back on a human's approval." : `No approval within ${r.approval_timeout_s} s: the lab rolled it back itself.`;
+  note.textContent = r.recovered_s === undefined ? "Checking recovery with the alarm rule…"
+    : r.recovered_s === null ? `Not back to normal within ${live.recoveryLimit} s.`
+    : `Recovered: telemetry back to normal ${r.recovered_s} s after the rollback, checked by the same rule that raised the alarm.`;
+}
+$("#fix-approve").onclick = async () => {
+  if (!live.incident) return;
+  const btn = $("#fix-approve"); btn.disabled = true;
+  try { await api("/api/live/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ incident_id: live.incident.id }) });
+        $("#fix-msg").textContent = "approved · rolling back"; }
+  catch (e) { $("#fix-msg").textContent = String(e.message); btn.disabled = false; }
+};
 function renderHandoff(id, handoff) {
   const box = $(`#${id}`); box.replaceChildren();
   if (!handoff || handoff.error) { box.append(el("div", "note-sm", handoff?.error || "No drafts.")); return; }
