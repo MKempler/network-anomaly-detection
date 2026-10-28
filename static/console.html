@@ -127,6 +127,21 @@ table.verdict:empty + .hint { display: block; }
 .verdict .stamp.ok { color: var(--ok); } .verdict .stamp.bad { color: var(--signal); }
 .verdict .cite { font: 400 11px var(--mono); color: var(--ink-3); margin-left: 6px; cursor: pointer; border-bottom: 1px solid var(--rule-strong); }
 .verdict tr.truth td { box-shadow: inset 2px 0 0 var(--ok); }
+.verdict tr.status td { padding: 2px 0 10px; border-bottom: 1px solid var(--rule-strong); }
+.verdict .answer { font: 600 11px/1.4 var(--cond); letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict .answer.ok { color: var(--ok); } .verdict .answer.esc { color: var(--signal); }
+.verdict .answer small { display: block; font: 400 12px/1.4 var(--sans); letter-spacing: 0; text-transform: none; color: var(--ink-3); }
+.verdict .more { margin: 8px 0 0; background: none; border: 1px solid var(--rule-strong); padding: 5px 9px; cursor: pointer;
+                 font: 600 10px/1 var(--cond); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.verdict .more:hover, .verdict .more[aria-expanded="true"] { border-color: var(--ink); color: var(--ink); }
+.verdict tr.detail td { padding: 0 0 14px; border-bottom: 1px solid var(--rule); }
+.detail-box { border-left: 2px solid var(--rule-strong); margin-left: 46px; padding: 2px 0 2px 12px; font-size: 12.5px; color: var(--ink-2); }
+.detail-box h4 { margin: 10px 0 4px; font: 600 10px/1 var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.detail-box p { margin: 0 0 4px; }
+.detail-box .ev { font: 400 11px/1.5 var(--mono); padding: 3px 0; cursor: pointer; border-bottom: 1px dotted var(--rule); }
+.detail-box .ev:hover { background: var(--raised); }
+.detail-box .ev b { font-weight: 500; color: var(--ink); }
+.detail-box .ev .hit { color: var(--ok); }
 .verdict tr.truth td.r { padding-left: 8px; }
 
 /* controls */
@@ -568,8 +583,84 @@ function logStep(logId, step, stamp) {
   return line;
 }
 
-function renderVerdict(id, causes, error) {
+/* Online Boutique's user-facing flows and the services each one passes through (its public architecture). */
+const OB_FLOWS = { "browsing products": ["frontend", "productcatalogservice", "currencyservice", "recommendationservice", "adservice"],
+  "the cart": ["frontend", "cartservice", "redis-cart", "productcatalogservice", "currencyservice", "shippingservice"],
+  "checkout": ["frontend", "checkoutservice", "cartservice", "productcatalogservice", "currencyservice", "shippingservice", "paymentservice", "emailservice"] };
+let TRUST_BAR = 0.92;   // the escalation bar frozen in eval-spec-v1.2; replaced by the recorded value below
+api("/api/trust").then((t) => { if (t.threshold) TRUST_BAR = t.threshold; }).catch(() => {});
+const pctOf = (x) => `${Math.round(x * 100)}%`;
+function answerStatus(causes, error, note) {
+  const top = (causes || [])[0];
+  if (error || !top) return ["esc", "No answer · escalate to a human", "The investigation ended without a ranking."];
+  if (top.verified === false) return ["esc", "Escalate to a human", "Its first cause was rejected by the verifier: the evidence it cited doesn't hold up."];
+  if (typeof top.confidence !== "number") return ["ok", "Answer", ""];
+  if (top.confidence >= TRUST_BAR) return ["ok", "Answer · verified", `Confidence ${pctOf(top.confidence)}, at or above the ${pctOf(TRUST_BAR)} bar${note}.`];
+  return ["esc", "Escalate to a human", `Verified, but its confidence (${pctOf(top.confidence)}) is below the ${pctOf(TRUST_BAR)} bar${note}.`];
+}
+function upstreamOf(graph, service) {
+  const seen = new Set(), queue = [service];
+  while (queue.length) { const s = queue.shift(); for (const e of graph) if (e.callee === s && !seen.has(e.caller) && e.caller !== service) { seen.add(e.caller); queue.push(e.caller); } }
+  return [...seen];
+}
+function strongest(c, trail) {   // the highest score any of its cited calls returned for this service
+  let best = null;
+  for (const cid of c.evidence || []) for (const s of trail || []) if (s.call_id === cid)
+    for (const e of s.evidence || []) if (e.service === c.service && (best === null || e.score > best)) best = e.score;
+  return best;
+}
+function causeDetail(c, i, ctx) {
+  const box = el("div", "detail-box"), bar = ctx.threshold ?? 3, mine = strongest(c, ctx.trail);
+  const top = ctx.causes[0], theirs = strongest(top, ctx.trail), fmt = (x) => (x === null ? "nothing" : `${x}`);
+  box.append(el("h4", null, i === 0 ? "Why it ranked first" : "Why it ranked below #1"),
+             el("p", null, i === 0 ? `Its strongest cited evidence scores ${fmt(mine)} (the verifier's bar is ${bar}).`
+                                   : `Its strongest cited evidence scores ${fmt(mine)}; ${top.service}'s scores ${fmt(theirs)}.` +
+                                     (c.verified === false ? " The verifier also rejected it." : "")));
+  if (c.verified !== undefined) box.append(el("h4", null, c.verified ? "The verifier accepted it" : "The verifier rejected it"),
+                                           el("p", null, c.verification || ""));
+  if ((c.evidence || []).length) {
+    box.append(el("h4", null, "The evidence it cites · click to find it in the flight log"));
+    for (const cid of c.evidence) {
+      const step = (ctx.trail || []).find((s) => s.call_id === cid), row = el("div", "ev");
+      if (!step) { row.append(el("b", null, cid), document.createTextNode(" · no such tool call was made")); box.append(row); continue; }
+      row.append(el("b", null, `${cid} ${step.name}(${Object.values(step.args || {}).join(", ")})`));
+      for (const e of (step.evidence || []).slice(0, 2)) {
+        const line = el("div", null, `→ ${e.service} · ${e.signal} · score ${e.score}`);
+        if (e.service === c.service && e.score >= bar) line.append(el("span", "hit", "  ✓ above the bar"));
+        row.append(line);
+      }
+      row.onclick = () => document.querySelectorAll(`#${ctx.log} .line[data-call="${CSS.escape(cid)}"]`).forEach((n) => {
+        n.scrollIntoView({ block: "nearest", behavior: "smooth" }); n.classList.add("hl"); setTimeout(() => n.classList.remove("hl"), 1600); });
+      box.append(row);
+    }
+  }
+  box.append(el("h4", null, "Blast radius"));
+  if (!(ctx.graph || []).length) box.append(el("p", null, "No traces were recorded for this outage, so its reach through the system can't be measured."));
+  else {
+    const up = upstreamOf(ctx.graph, c.service);
+    if (!up.length) box.append(el("p", null, `Nothing calls ${c.service} in the recorded traces; it is where requests enter.`));
+    else {
+      const worst = {};
+      for (const s of ctx.trail || []) for (const e of s.evidence || []) if (up.includes(e.service) && e.score >= bar) worst[e.service] = Math.max(worst[e.service] || 0, e.score);
+      box.append(el("p", null, `Calls into it, directly or through others (from the traces): ${up.join(", ")}.`));
+      const hurt = Object.entries(worst).sort((a, b) => b[1] - a[1]);
+      box.append(el("p", null, hurt.length ? `Of those, showing problems in this investigation: ${hurt.map(([s, v]) => `${s} (score ${v})`).join(", ")}.`
+                                           : "None of them showed problems above the verifier's bar in this investigation."));
+    }
+    if (ctx.system === "OB") {
+      const flows = Object.entries(OB_FLOWS).filter(([, svcs]) => svcs.includes(c.service)).map(([f]) => f);
+      box.append(el("p", null, flows.length ? `Customer-facing flows that pass through it: ${flows.join(", ")}.` : "It sits on none of the shop's customer-facing flows."));
+    }
+  }
+  return box;
+}
+function renderVerdict(id, causes, error, ctx) {
   const table = $(`#${id}`); table.replaceChildren();
+  if (ctx) {
+    const [cls, head, why] = answerStatus(causes, error, ctx.barNote || "");
+    const tr = el("tr", "status"), td = el("td"); td.colSpan = 2;
+    const a = el("div", `answer ${cls}`, head); if (why) a.append(el("small", null, why)); td.append(a); tr.append(td); table.append(tr);
+  }
   if (error || !causes || !causes.length) { const tr = el("tr"); tr.append(el("td", "r", "—"), el("td", "why", error || "No ranking was submitted.")); table.append(tr); return; }
   causes.forEach((c, i) => {
     const tr = el("tr", i === 0 ? "first" : ""); tr.dataset.service = c.service;
@@ -590,6 +681,16 @@ function renderVerdict(id, causes, error) {
       td.append(cite);
     }
     tr.append(td); table.append(tr);
+    if (ctx) {
+      const more = el("button", "more", i === 0 ? "Evidence · blast radius" : "Why not first? · evidence");
+      more.setAttribute("aria-expanded", "false"); td.append(el("div"), more);
+      let detail = null;
+      more.onclick = () => {
+        if (detail) { detail.remove(); detail = null; more.setAttribute("aria-expanded", "false"); return; }
+        detail = el("tr", "detail"); const cell = el("td"); cell.colSpan = 2; cell.append(causeDetail(c, i, { ...ctx, causes })); detail.append(cell);
+        tr.after(detail); more.setAttribute("aria-expanded", "true");
+      };
+    }
   });
 }
 
@@ -656,7 +757,8 @@ $("#play-btn").onclick = () => {
   const start = frames * frameMs + 300, stepMs = 950 / speed, steps = b.trail.filter((s) => s.type !== "submit");
   replay.timers.push(setTimeout(() => renderRail("replay-rail", "investigating", {}, () => "", REPLAY_PHASES), start));
   steps.forEach((s, i) => replay.timers.push(setTimeout(() => logStep("replay-log", s, "#" + String(i + 1).padStart(2, "0")), start + i * stepMs)));
-  replay.timers.push(setTimeout(() => { renderVerdict("replay-verdict", b.causes, b.error); renderRail("replay-rail", "diagnosed", {}, () => "", REPLAY_PHASES); $("#reveal-btn").disabled = false; $("#reveal-note").hidden = true; }, start + steps.length * stepMs + 300));
+  replay.timers.push(setTimeout(() => { renderVerdict("replay-verdict", b.causes, b.error,
+    { trail: b.trail, graph: b.graph, system: b.system, threshold: b.evidence_threshold, log: "replay-log" }); renderRail("replay-rail", "diagnosed", {}, () => "", REPLAY_PHASES); $("#reveal-btn").disabled = false; $("#reveal-note").hidden = true; }, start + steps.length * stepMs + 300));
 };
 $("#table-btn").onclick = () => {
   const b = replay.bundle, box = $("#replay-table"), open = box.hidden;
@@ -869,7 +971,8 @@ function onLiveEvent(e) {
     applyIncident(e.incident); const inc = e.incident, stamp = clockOf(live.start)(inc.times[inc.phase] || Date.now() / 1000);
     const text = { settling: "letting the system settle", injected: "fault injected · the investigator is not told", alarm: `alarm raised after ${e.detect_s}s`,
                    missed: "no alarm: the detector missed this one", investigating: "investigation starts", recovered: "fault reverted · system recovering" }[inc.phase];
-    if (inc.phase === "diagnosed") { renderVerdict("live-verdict", inc.causes, inc.verdict.error); const v = inc.verdict;
+    if (inc.phase === "diagnosed") { renderVerdict("live-verdict", inc.causes, inc.verdict.error,
+      { trail: inc.trail, graph: inc.graph, system: "OB", threshold: 3, log: "live-log", barNote: " (fitted on hosted Spark)" }); const v = inc.verdict;
       logLine("live-log", stamp, "SYS", v.investigated ? (v.top1 ? `correct: ${inc.service} ranked first` : v.top3 ? `close: ${inc.service} in the top 3` : `missed: ${inc.service} not in the top 3`) : (e.note || "not investigated"), v.top1 ? "sys" : "alarm");
       live.feedbackFor = inc.id; $("#live-feedback").hidden = false; }
     else if (text) logLine("live-log", stamp, "SYS", text, inc.phase === "alarm" || inc.phase === "missed" ? "alarm" : "sys");
