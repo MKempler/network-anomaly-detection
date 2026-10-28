@@ -222,6 +222,7 @@ a.btn.solid { color: var(--surface); }
 .evidence { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
 .evidence h1 { font: 600 30px/1.1 var(--cond); letter-spacing: 0.01em; margin: 0 0 8px; }
 .evidence p.lede { color: var(--ink-2); max-width: 720px; margin: 0 0 26px; }
+.evidence p.lede a { color: var(--ink); }
 .evidence h2.ev-h2 { font: 600 22px/1.2 var(--cond); margin: 36px 0 8px; }
 .evidence p.ev-note { margin: -18px 0 30px; max-width: 720px; }
 .scrollx { overflow-x: auto; margin-bottom: 30px; }
@@ -803,8 +804,10 @@ $("#reveal-btn").onclick = async () => {
 function colgroup(cols = ["m", "v", "b", "s", "s", "f"]) { const g = el("colgroup"); cols.forEach((c) => g.append(el("col", c))); return g; }
 async function renderEvidence() {
   const root = $("#evidence-body"); root.replaceChildren();
-  root.append(el("h1", null, "Every number comes from a recorded, reproducible run"),
-              el("p", "lede", "Held-out test outages from the RCAEval benchmark, scored the way RCAEval scores published methods. Published methods were re-run from their authors' code on the same cases. Intervals are 95%, from a bootstrap over fault groups. The Glimmer rows are Meta's 30B open-weight model running the same agent, before and after fine-tuning on hosted Spark's verified investigations of the train split. It is small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls; for these runs it was served on a rented GPU on Modal."));
+  const lede = el("p", "lede", "Held-out test outages from the RCAEval benchmark, scored the way RCAEval scores published methods. Published methods were re-run from their authors' code on the same cases. Intervals are 95%, from a bootstrap over fault groups. The Glimmer rows are Meta's 30B open-weight model running the same agent, before and after fine-tuning on hosted Spark's verified investigations of the train split. It is small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls; for these runs it was served on a rented GPU on Modal. The fine-tuned adapter is public on Hugging Face: ");
+  const hf = el("a", null, "maxkempler/epicenter-glimmer-30b-rca-lora"); hf.href = "https://huggingface.co/maxkempler/epicenter-glimmer-30b-rca-lora";
+  hf.target = "_blank"; hf.rel = "noopener"; lede.append(hf, document.createTextNode("."));
+  root.append(el("h1", null, "Every number comes from a recorded, reproducible run"), lede);
   for (const suite of ["RE1", "RE2", "RE3"]) {
     const data = await api(`/api/results?suite=${suite}`);
     const t = el("table", "etable"); t.append(colgroup());

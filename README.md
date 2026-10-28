@@ -67,6 +67,8 @@ Every service is measured from its callers' spans as well as its own, the way a 
 
 Glimmer 30B is Meta's open-weight model, small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls. Out of the box it often loses the thread of the investigation: on 140 of the 468 test outages it never submitted a ranking within its budget (10 investigation turns, then a final turn offering only `submit_ranking`), or submitted one that didn't parse. When it does answer, its confident answers are mostly right.
 
+**The adapter is published on Hugging Face: [maxkempler/epicenter-glimmer-30b-rca-lora](https://huggingface.co/maxkempler/epicenter-glimmer-30b-rca-lora)**, with a model card covering its training, results and how to serve it.
+
 So it was taught by the hosted agent ([`scripts/finetune/`](scripts/finetune)):
 
 1. **Lessons.** Hosted Spark investigated every *train-split* case. The 246 runs where it ranked the true cause first *and* the verifier accepted that cause became the lessons (212 to train, 34 to validate). Test cases are never read.
