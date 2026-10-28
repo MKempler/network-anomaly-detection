@@ -122,9 +122,10 @@ def main():
             c = summary["cost"]
             usd = f", ${c['usd_per_investigation_contributor']} Contributor / ${c['usd_per_investigation_standard']} " \
                   f"Standard per investigation" if "usd_per_investigation_contributor" in c else ""
+            secs = (f"{c['model_seconds_median']:.1f} s model time (p90 {c['model_seconds_p90']:.1f})"
+                    if c["model_seconds_median"] is not None else "model time not recorded for these runs")
             print(f"  cost: median {c['input_tokens_median']:.0f} in / {c['output_tokens_median']:.0f} out tokens, "
-                  f"{c['model_seconds_median']:.1f} s model time (p90 {c['model_seconds_p90']:.1f}), "
-                  f"{c['turns_median']} turns, {c['tool_calls_median']} tool calls{usd}\n")
+                  f"{secs}, {c['turns_median']} turns, {c['tool_calls_median']} tool calls{usd}\n")
 
     if not args.no_record:
         line = {"run_id": uuid.uuid4().hex[:12], "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
