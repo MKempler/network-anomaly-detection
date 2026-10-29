@@ -942,6 +942,9 @@ async function initLive() {
   showModel(state.current?.model);
   renderTally(state.tally); renderQueue(state.queue);
   if (state.current) applyIncident(state.current);
+  // the last five minutes, so the charts start full instead of filling in from now
+  const past = await api(`/api/live/history?metrics=${LIVE_METRICS.join(",")}`).catch(() => []);
+  if (past.length) { live.rows = past; drawLive(); }
   const events = new EventSource("/api/live/events");
   events.onmessage = (m) => onLiveEvent(JSON.parse(m.data));
 }
@@ -978,7 +981,7 @@ function applyIncident(inc) {
   renderRail("live-rail", inc.phase, inc.times, clockOf(live.start));
 }
 function onLiveEvent(e) {
-  if (e.type === "tick" && e.row) { live.rows.push([e.time, e.row]); if (live.rows.length > 600) live.rows.shift(); drawLive(); }
+  if (e.type === "tick" && e.row && !(live.rows.length && e.time <= live.rows[live.rows.length - 1][0])) { live.rows.push([e.time, e.row]); if (live.rows.length > 600) live.rows.shift(); drawLive(); }
   else if (e.type === "queue") renderQueue(e.queue);
   else if (e.type === "tally" || e.type === "hello") renderTally(e.tally);
   else if (e.type === "phase") {

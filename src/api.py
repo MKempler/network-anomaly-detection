@@ -21,6 +21,8 @@ the shared live system:
 - POST /api/live/approve                      a human approves the rollback proposed after a diagnosis
 - GET  /api/live/events                       Server-Sent Events: phases, agent
                                               steps, and a metrics tick per second
+- GET  /api/live/history?metrics=a,b          the last few minutes of those metrics, so a
+                                              newly opened page starts with full charts
 - POST /api/live/feedback                     a vote and optional comment
 - POST /webhook/alertmanager                  a Prometheus Alertmanager webhook; needs
                                               WEBHOOK_TOKEN, queues an investigation
@@ -341,6 +343,11 @@ def live_events(request: Request):
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/live/history")
+def live_history(request: Request, metrics: str = Query(max_length=1000), seconds: int = Query(300, ge=1, le=600)):
+    return _lab(request).telemetry.recent(seconds, set(metrics.split(",")))
 
 
 class Feedback(BaseModel):

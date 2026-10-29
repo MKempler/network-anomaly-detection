@@ -243,3 +243,12 @@ def test_trust_serves_the_latest_clean_test_analysis(client):
 def test_approving_when_nothing_awaits_is_refused(client, live):
     r = client.post("/api/live/approve", json={"incident_id": "abc"})
     assert r.status_code == 409
+
+
+def test_history_serves_recent_rows_of_the_asked_metrics(client, live, tmp_path):
+    from src.lab.telemetry import Telemetry
+    live.telemetry = Telemetry(docker_client=None, spans_file=tmp_path / "none.jsonl")
+    live.telemetry.rows.extend((t, {"cart_latency": float(t), "cart_cpu": 1.0}) for t in range(100))
+    rows = client.get("/api/live/history?metrics=cart_latency&seconds=5").json()
+    assert rows[0] == [94, {"cart_latency": 94.0}] and rows[-1] == [99, {"cart_latency": 99.0}]
+    assert client.get("/api/live/history?metrics=cart_cpu&seconds=601").status_code == 422

@@ -219,6 +219,13 @@ class Telemetry:
 
     # -- reading ---------------------------------------------------------------
 
+    def recent(self, seconds: float, metrics: set[str]) -> list[tuple[int, dict]]:
+        """The last `seconds` of rows, cut down to `metrics`, for a page that just opened."""
+        with self._lock:
+            rows = list(self.rows)
+        since = rows[-1][0] - seconds if rows else 0
+        return [(t, {k: v for k, v in r.items() if k in metrics}) for t, r in rows if t >= since]
+
     def frame(self, start: float, end: float) -> pd.DataFrame:
         with self._lock:
             rows = [(t, r) for t, r in self.rows if start <= t < end]

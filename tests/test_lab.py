@@ -396,3 +396,12 @@ def test_an_incident_leaving_the_queue_is_announced(tmp_path):
         pass
     events = [q.get_nowait() for _ in range(q.qsize())]
     assert {"type": "queue", "queue": []} in events
+
+
+def test_recent_keeps_the_last_seconds_and_only_the_asked_metrics(tmp_path):
+    from src.lab.telemetry import Telemetry
+    tel = Telemetry(docker_client=None, spans_file=tmp_path / "none.jsonl")
+    tel.rows.extend((t, {"cart_latency": float(t), "cart_cpu": 1.0}) for t in range(100, 110))
+    assert tel.recent(2, {"cart_latency"}) == [(107, {"cart_latency": 107.0}), (108, {"cart_latency": 108.0}),
+                                               (109, {"cart_latency": 109.0})]
+    assert Telemetry(docker_client=None, spans_file=tmp_path / "none.jsonl").recent(300, {"cart_cpu"}) == []
