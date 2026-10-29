@@ -252,3 +252,9 @@ def test_history_serves_recent_rows_of_the_asked_metrics(client, live, tmp_path)
     rows = client.get("/api/live/history?metrics=cart_latency&seconds=5").json()
     assert rows[0] == [94, {"cart_latency": 94.0}] and rows[-1] == [99, {"cart_latency": 99.0}]
     assert client.get("/api/live/history?metrics=cart_cpu&seconds=601").status_code == 422
+
+
+def test_detector_anchored_results_count_the_outages_never_flagged(client):
+    flagged = {r["ranker"]: r for r in client.get("/api/results?suite=RE3&anchor=detector").json()["rankers"]}
+    assert flagged["spark-agent-all"]["unflagged"] == flagged["nsigma"]["unflagged"] == 52
+    assert all("unflagged" not in r for r in client.get("/api/results?suite=RE3").json()["rankers"])

@@ -219,7 +219,7 @@ Requires Python 3.13 and, for the live lab, Docker.
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python scripts/download_data.py --rcaeval RE1 RE2 RE3   # SMD and RCAEval from Zenodo, MD5-checked
-pytest                                                  # 177 tests: scoring, leakage, tools, lab, API, trust, robustness
+pytest                                                  # 180 tests: scoring, leakage, tools, lab, API, trust, robustness
 ```
 
 **Every model number, with no network and no API key.** Each model call is recorded in [`runs/llm/`](runs/llm), keyed by a hash of the request, and `--offline` replays a run from that record. The tools recompute their results from the downloaded data, so the verifier re-checks every citation.

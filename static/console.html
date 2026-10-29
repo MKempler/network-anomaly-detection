@@ -465,6 +465,11 @@ const RANKERS = { "baro": "BARO", "nsigma": "N-Sigma", "mmbaro": "Multi-source B
   "open-one-shot": "Spark Open · one prompt", "open-agent": "Spark Open agent · metrics", "open-agent-all": "Spark Open agent · metrics, logs, traces",
   "glimmer-agent-all": "Glimmer 30B agent · open weights", "glimmer-tuned-agent-all": "Glimmer 30B agent · fine-tuned on Spark's investigations" };
 const PUBLISHED = new Set(["baro", "nsigma", "mmbaro"]);
+// RE2 robustness runs: hosted Spark's agent with one input degraded (src/robustness.py), shown apart from the ladder
+const ROBUST = [["spark-agent-all", "Full: metrics, logs, traces"], ["spark-agent-nologs", "Logs removed"],
+  ["spark-agent-notraces", "Traces removed (and with them the call graph)"], ["spark-agent-noisy", "Noisy metrics (noise at half each metric's normal spread)"],
+  ["spark-agent-late", "Alarm 60 s late"], ["spark-agent", "Logs and traces both removed (the metrics-only rung above)"]];
+const DEGRADED = new Set(["spark-agent-nologs", "spark-agent-notraces", "spark-agent-noisy", "spark-agent-late"]);
 const TAG = { top_deviations: "MET", compare_to_baseline: "MET", get_metric_window: "MET", get_logs: "LOG",
               get_trace_errors: "TRC", get_dependencies: "DEP" };
 const PHASES = ["queued", "settling", "injected", "alarm", "investigating", "diagnosed", "fixing", "recovered"];
@@ -807,9 +812,15 @@ async function renderEvidence() {
   const lede = el("p", "lede", "Held-out test outages from the RCAEval benchmark, scored the way RCAEval scores published methods. Published methods were re-run from their authors' code on the same cases. Intervals are 95%, from a bootstrap over fault groups. The Glimmer rows are Meta's 30B open-weight model running the same agent, before and after fine-tuning on hosted Spark's verified investigations of the train split. It is small enough to serve on a single GPU, so a team could keep its telemetry on hardware it controls; for these runs it was served on a rented GPU on Modal. The fine-tuned adapter is public on Hugging Face: ");
   const hf = el("a", null, "maxkempler/epicenter-glimmer-30b-rca-lora"); hf.href = "https://huggingface.co/maxkempler/epicenter-glimmer-30b-rca-lora";
   hf.target = "_blank"; hf.rel = "noopener"; lede.append(hf, document.createTextNode("."));
-  root.append(el("h1", null, "Every number comes from a recorded, reproducible run"), lede);
-  for (const suite of ["RE1", "RE2", "RE3"]) {
-    const data = await api(`/api/results?suite=${suite}`);
+  const loading = el("p", "note-sm ev-note", "Loading the recorded runs…");
+  root.append(el("h1", null, "Every number comes from a recorded, reproducible run"), lede, loading);
+  const suites = ["RE1", "RE2", "RE3"];
+  const [inject, flagged] = await Promise.all([Promise.all(suites.map((s) => api(`/api/results?suite=${s}`))),
+                                               Promise.all(suites.map((s) => api(`/api/results?suite=${s}&anchor=detector`)))]);
+  loading.remove();
+  for (const data of inject) {
+    const suite = data.suite, robust = data.rankers;
+    data.rankers = data.rankers.filter((r) => !DEGRADED.has(r.ranker));
     const t = el("table", "etable"); t.append(colgroup());
     const cap = el("caption"); cap.append(el("span", "label", `${suite} · ${data.rankers[0]?.cases ?? "–"} test outages · investigation starts at the fault time`)); t.append(cap);
     const head = el("tr"); ["Method", "Top-1", "", "Top-3", "Avg@5", "Failed"].forEach((h, i) => head.append(el("th", i === 2 || i === 4 ? "wide" : null, h))); t.append(head);
@@ -823,7 +834,9 @@ async function renderEvidence() {
       t.append(tr);
     });
     root.append(t);
+    if (robust.some((r) => DEGRADED.has(r.ranker))) renderRobustness(root, robust);
   }
+  renderEndToEnd(root, flagged);
   await renderTrust(root).catch(() => {});
   const det = await api("/api/detection");
   const t = el("table", "etable"); t.append(colgroup(["m", "s", "s", "v", "b", "f"])); const cap = el("caption"); cap.append(el("span", "label", "Detection · 28 SMD servers · event-level scoring, no point adjustment")); t.append(cap);
@@ -838,6 +851,34 @@ async function renderEvidence() {
     tr.append(el("td", "v", d.mean_delay?.toFixed(1) ?? "–")); t.append(tr);
   });
   root.append(t);
+}
+
+/* Robustness: the same RE2 outages with one of the agent's inputs degraded (eval-spec-v1.3). */
+function renderRobustness(root, rankers) {
+  const by = Object.fromEntries(rankers.map((r) => [r.ranker, r]));
+  root.append(simpleTable("RE2 · robustness · hosted Spark's agent with one input degraded", ["Input to the agent", "Top-1", "Top-3"],
+    ROBUST.filter(([k]) => by[k]).map(([k, label]) => [label, by[k].ac1.toFixed(3), by[k].ac3.toFixed(3)]), ["m", "s", "s"]));
+  root.append(el("p", "note-sm ev-note", "Against the full agent on the same 162 outages (exact McNemar), no single degradation causes a significant drop; " +
+    "the late alarm costs the most (p = 0.45). At 162 outages that rules out large drops, not small ones. Removing logs and traces together does cost accuracy " +
+    "(p = 0.012): one of the two is enough for the network faults that metrics miss."));
+}
+
+/* End to end: nothing is told the fault time; our detector's flag anchors the investigation. */
+function renderEndToEnd(root, suites) {
+  const pick = (data, ranker) => data.rankers.find((r) => r.ranker === ranker);
+  const spark = suites.map((d) => pick(d, "spark-agent-all")), nsigma = suites.map((d) => pick(d, "nsigma"));
+  if (spark.some((r) => !r || r.unflagged == null)) return;
+  root.append(el("h2", "ev-h2", "End to end: our detector chooses where to look"),
+              el("p", "lede", "Here nothing is told the fault time. Our detector's flag anchors the investigation, and an outage it never flags is a miss for every method."));
+  const fmt = (r) => (r ? r.ac1.toFixed(3) : "–");
+  root.append(simpleTable("Top-1 accuracy, detector-anchored · held-out test outages", ["", ...suites.map((d) => d.suite)], [
+    ["Outages the detector flagged", ...spark.map((r) => `${r.cases - r.unflagged} of ${r.cases}`)],
+    ["N-Sigma (published), all outages", ...nsigma.map(fmt)],
+    ["Muse Spark agent (hosted), all outages", ...spark.map(fmt)],
+    ["Muse Spark agent (hosted), flagged outages only", ...spark.map((r) => (Math.round(r.ac1 * r.cases) / (r.cases - r.unflagged)).toFixed(3))],
+  ], ["m", "s", "s", "s"]));
+  root.append(el("p", "note-sm ev-note", "When the detector fires, the agent is about as accurate as when it is handed the fault time. " +
+    "Detection is the bottleneck, above all on RE3's code-level faults, which often leave little trace in the metrics the detector watches."));
 }
 
 /* Trust: escalation, why misses missed, cost. From runs/trust_summary.jsonl (scripts/report_trust.py). */

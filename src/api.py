@@ -4,7 +4,8 @@
 
 Serves static/console.html and:
 - GET  /api/health
-- GET  /api/results?suite=RE1&anchor=inject   latest clean run per ranker
+- GET  /api/results?suite=RE1&anchor=inject   latest clean run per ranker; with
+                                              anchor=detector, how many outages it never flagged
 - GET  /api/runs, GET /api/runs/{run_id}      every recorded evaluation run
 - GET  /api/detection                         recorded SMD detector runs
 - GET  /api/replays?suite=RE1                 replay library index
@@ -46,6 +47,7 @@ import os
 import queue
 import threading
 from contextlib import asynccontextmanager
+from functools import cache
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -177,7 +179,19 @@ def results(suite: str = Query("RE1"), anchor: str = Query("inject"), part: str 
     latest = {}
     for r in rows:
         latest[r.ranker] = _row(r)   # later runs replace earlier ones
+    for r in latest.values():
+        stats = _anchor_stats().get(r["run_id"])
+        if stats:
+            r["unflagged"] = stats["never"]
     return {"suite": suite, "anchor": anchor, "part": part, "rankers": list(latest.values())}
+
+
+@cache
+def _anchor_stats() -> dict:
+    """Where our detector's flag fell, per detector-anchored run (runs/explain_summary.jsonl)."""
+    path = ROOT / "runs" / "explain_summary.jsonl"
+    rows = [json.loads(line) for line in open(path)] if path.exists() else []
+    return {r["run_id"]: r["anchor_stats"] for r in rows if r.get("anchor_stats")}
 
 
 @app.get("/api/trust")
