@@ -327,7 +327,7 @@ table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /*
       <div id="live-offline" class="empty" hidden></div>
       <div class="how">
         <h3 class="label" style="margin:0 0 10px">How a live outage works</h3>
-        <p>A real online shop of 11 services; the charts above are its live telemetry.</p>
+        <p>A real online shop of 10 services, with simulated shoppers browsing and buying; the charts above are its live telemetry.</p>
         <ol>
           <li><b>You pick a fault</b> and it goes in.</li>
           <li><b>The alarm fires</b> when the shop's telemetry stays abnormal.</li>
@@ -1008,7 +1008,7 @@ function renderQueue(q) {
 }
 const modelName = (key) => live.models?.[key] || "Muse Spark Open";
 function showModel(key) {
-  setStatus([["SYSTEM", "Online Boutique · 11 services"], ["MODEL", modelName(key)], ["SOURCES", "metrics · logs · traces"], ["LAB", "live"]]);
+  setStatus([["SYSTEM", "Online Boutique · 10 services"], ["MODEL", modelName(key)], ["SOURCES", "metrics · logs · traces"], ["LAB", "live"]]);
 }
 function applyIncident(inc) {
   if (!live.incident || live.incident.id !== inc.id) {

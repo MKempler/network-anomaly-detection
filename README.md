@@ -50,7 +50,7 @@ The same agent loop runs on three Meta models: Muse Spark through the Meta Model
 
 ## The live lab
 
-[`lab/`](lab) runs Google's [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo) (v0.10.5, 11 services) under Docker with an OpenTelemetry collector, next to the investigator. Anyone with the console open can break it:
+[`lab/`](lab) runs Google's [Online Boutique](https://github.com/GoogleCloudPlatform/microservices-demo) (v0.10.5: 10 services plus its load generator of simulated shoppers) under Docker with an OpenTelemetry collector, next to the investigator. Anyone with the console open can break it:
 
 - **Pick a service and a fault** from a fixed menu: +400 ms network delay, 30% packet loss, CPU starved to 1% of a core, or the service frozen. Nothing is free-form.
 - **Watch it unfold.** Outages run one at a time on the shared system: settle, inject, alarm, investigate, diagnose, recover. The console streams the telemetry, the agent's tool calls, the ranked causes and the handoff drafts as they happen.
@@ -287,7 +287,7 @@ modal deploy scripts/finetune/modal_app.py               # vLLM: base and adapte
 
 - **Benchmarks are cleaner than production.** RCAEval injects one fault at a time into three demo systems. Real outages overlap, cascade and come with noisier telemetry.
 - **Detection is the weak link end to end.** It misses 52 of RE3's 81 outages, and the SMD detectors trade precision against recall at F1 0.11–0.31.
-- **The live lab is small.** 11 services, four fault types, and calibration batches of nine outages: a demonstration, not a benchmark.
+- **The live lab is small.** 10 services, four fault types, and calibration batches of nine outages: a demonstration, not a benchmark.
 - **The fine-tuned model still trails the hosted one** on first place for RE1 and RE3. It learned from Spark's actions and short notes; Spark's full reasoning is not available to learn from.
 - **In this demo Glimmer runs on a rented cloud GPU.** Keeping telemetry on your own hardware is what open weights make possible, not what this deployment does.
 - **A call-graph prior didn't help.** We tested a deterministic re-ranker that demotes downstream "victim" services using the trace call graph; on the 265 train investigations that produced a ranking it dropped AC@1 from 0.928 to 0.887 (breaking 11, fixing 0), so we did not ship it. The agent already reasons about cause versus victim through `get_dependencies`.
