@@ -6,7 +6,8 @@ Answers are scored against the benchmark's labels read locally (no answer key
 is committed). With three to five participants this is reported as raw
 per-person numbers and medians: direction, not statistical significance.
 Each participant did three outages with Epicenter and three without, so the
-per-person difference is the most informative figure.
+per-person difference is the most informative figure. Participant codes
+starting with "dry" are rehearsals of the study itself and are never counted.
 """
 
 import json
@@ -21,11 +22,13 @@ from src.evaluate_explain import service_of_item  # noqa: E402
 from src.load_rcaeval import load_labels  # noqa: E402
 
 STUDY = ROOT / "runs" / "study"
+REHEARSAL = "dry"   # code prefix for dry runs of the study
 
 
 def load(name):
     path = STUDY / name
-    return [json.loads(line) for line in open(path)] if path.exists() else []
+    rows = [json.loads(line) for line in open(path)] if path.exists() else []
+    return [r for r in rows if not r["participant"].lower().startswith(REHEARSAL)]
 
 
 def main():
