@@ -24,7 +24,7 @@ ufw --force enable
 # Security updates install themselves; logins are by SSH key only.
 dpkg-reconfigure -f noninteractive unattended-upgrades
 sed -i -E 's/^#?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-systemctl reload ssh
+systemctl try-reload-or-restart ssh   # 24.04 starts sshd on demand, so it may not be running yet
 
 # A little swap, so building images can't run the server out of memory.
 if ! swapon --show | grep -q /swapfile; then
