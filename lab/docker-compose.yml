@@ -170,6 +170,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - spans:/spans:ro
       - ../runs/live:/app/runs/live
+      - ../runs/study:/app/runs/study   # the study's cases, and the answers it collects
     ports: ["127.0.0.1:8000:8000"]
 
 networks:
