@@ -95,7 +95,7 @@ Against hosted Spark, the tuned model is level on RE2 (0.944 vs 0.963, p = 0.55)
 
 **Split.** [`data_splits.json`](data_splits.json) is a group split by (service, fault) within each system, so near-duplicate instances never cross between train and test: 225 / 162 / 81 test outages. Tools and prompts were developed on train cases only.
 
-**Pre-registration.** The scoring code, configuration, prompt templates and split were tagged [`eval-spec-v1`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1) before the first model run, and [`eval-spec-v1.1`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1.1) before the end-to-end runs.
+**Pre-registration.** The scoring code, configuration, prompt templates and split were tagged [`eval-spec-v1`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1) before the first model run, [`eval-spec-v1.1`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1.1) before the end-to-end runs, and later additions each under their own tag before their first test run: the trust analyses (v1.2), robustness (v1.3) and the error-log detector (v1.4).
 
 **Scoring.** RCAEval's own rule: a ranked item maps to its service, the first appearance counts, and AC@1, AC@3 and Avg@5 are reported. A failed run, a rejected cause or a missing rank scores as a miss. Intervals are 95%, from a bootstrap over fault groups; comparisons between methods use paired exact McNemar tests on the same cases.
 
@@ -176,7 +176,7 @@ Multi-source BARO is run on RE2 only: it needs RCAEval's log and trace time seri
 
 Escalation has a price: of the 58 outages it hands over, 45 would have been answered correctly. It buys 13 wrong answers avoided, a third as many wrong answers as answering everything.
 
-Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had the true cause at ranks 2–5, 2 named it with evidence the verifier rejected, and 2 examined it without naming it. In the 4 of those 19 where a recorded call graph exists to check, only 1 wrong first pick sat upstream of the true cause (a victim of it) and 3 were off its call path entirely; with 4 cases that is a hint, not proof, and the other 15 can't be checked. End to end, detection dominates: of 113 misses when our detector chooses where to look, 89 are outages it never flagged (52 of them on RE3) and 24 are wrong diagnoses after a flag. `python scripts/report_misses.py` reproduces these counts. The verifier rejects 12–17% of all proposed causes, nearly all below first place. A median investigation takes 37–46 s of model time on hosted Spark and costs about $0.006 at the Contributor tier; the fine-tuned Glimmer writes about a third of the output tokens. `python scripts/report_trust.py --part test` reproduces all of it from the recorded runs, including the failure breakdown and cost for every model.
+Most misses are near misses: of hosted Spark's 19 wrong first answers, 15 had the true cause at ranks 2–5, 2 named it with evidence the verifier rejected, and 2 examined it without naming it. In the 4 of those 19 where a recorded call graph exists to check, only 1 wrong first pick sat upstream of the true cause (a victim of it) and 3 were off its call path entirely; with 4 cases that is a hint, not proof, and the other 15 can't be checked. End to end, detection dominated: with the metric-only detector, 89 of 113 misses were outages it never flagged (52 of them on RE3) and 24 were wrong diagnoses after a flag. Adding error logs to the detector (below) cuts the misses to 90, of which 67 are never flagged. `python scripts/report_misses.py` reproduces these counts. The verifier rejects 12–17% of all proposed causes, nearly all below first place. A median investigation takes 37–46 s of model time on hosted Spark and costs about $0.006 at the Contributor tier; the fine-tuned Glimmer writes about a third of the output tokens. `python scripts/report_trust.py --part test` reproduces all of it from the recorded runs, including the failure breakdown and cost for every model.
 
 **Robustness to messy telemetry.** Real telemetry is often incomplete, so the all-sources hosted agent was re-run on RE2's 162 test outages with one natural degradation at a time, applied before the investigation starts. The conditions were frozen as [`eval-spec-v1.3`](https://github.com/MKempler/network-anomaly-detection/tree/eval-spec-v1.3) before any test run.
 
@@ -194,12 +194,20 @@ No degradation causes a significant drop; at 162 outages that rules out large dr
 
 | AC@1, detector-anchored | RE1 | RE2 | RE3 |
 |---|---:|---:|---:|
+| **Detector watching metrics and error logs (v1.4)** | | | |
+| Outages the detector flagged | 202 of 225 | 148 of 162 | **51 of 81** |
+| N-Sigma (published), all outages | 0.578 | 0.691 | 0.407 |
+| Muse Spark agent (hosted), all outages | 0.840 | 0.858 | **0.617** |
+| Muse Spark agent (hosted), flagged outages only | 0.936 | 0.939 | 0.980 |
+| **Detector watching metrics only (v1)** | | | |
 | Outages the detector flagged | 202 of 225 | 148 of 162 | 29 of 81 |
 | N-Sigma (published), all outages | 0.578 | 0.691 | 0.235 |
 | Muse Spark agent (hosted), all outages | 0.831 | 0.864 | 0.346 |
 | Muse Spark agent (hosted), flagged outages only | 0.926 | 0.946 | 0.966 |
 
-When the detector fires, the agent is about as accurate as when it is handed the fault time. Detection is the bottleneck, above all on RE3's code-level faults, which often leave little trace in the metrics the detector watches.
+When the detector fires, the agent is about as accurate as when it is handed the fault time, so detection is the bottleneck. With metrics alone it was worst on RE3's code-level faults, which often leave CPU, memory and latency normal while the broken service starts logging exceptions. So the detector also watches each service's error lines against its own normal rate ([`src/anchor.py`](src/anchor.py)) and starts the investigation at whichever signal fires first. On RE3 it now flags 51 outages instead of 29 with no more early alarms, and hosted Spark goes from 0.346 to 0.617 (23 outages gained, 1 lost, exact McNemar p = 3e-6). RE1 has no logs and RE2's start times are unchanged; their v1.4 numbers are fresh runs of the same investigations, and the differences from v1 are run-to-run variation (p = 0.75 and 1.0).
+
+The error-log settings were frozen under `eval-spec-v1.4` before any test run, on train cases only ([`scripts/tune_anchor.py`](scripts/tune_anchor.py), [`runs/anchor_tuning.jsonl`](runs/anchor_tuning.jsonl)). They were chosen as harmless, not shown to help: RE3's nine train outages include no Train Ticket outage and only two fault types, no setting improved on metrics alone there, so a rule fixed in advance took the setting that left every train result unchanged and whose log signal alone flagged the most train outages on time (11, none early).
 
 **Detection on its own.** On the [SMD](https://github.com/NetManAIOps/OmniAnomaly) dataset (28 servers, 327 labelled anomaly events), each detector is fit per server on the training data alone: the z-score flags beyond 3 standard deviations, and the isolation forest and LSTM autoencoder at the 99th percentile of their training scores. Nothing is tuned on test labels. Scoring is event-level: one labelled segment is one event, and no point adjustment is applied.
 
@@ -221,7 +229,7 @@ Requires Python 3.13 and, for the live lab, Docker.
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python scripts/download_data.py --rcaeval RE1 RE2 RE3   # SMD and RCAEval from Zenodo, MD5-checked
-pytest                                                  # 180 tests: scoring, leakage, tools, lab, API, trust, robustness
+pytest                                                  # 188 tests: scoring, leakage, tools, lab, API, trust, robustness
 ```
 
 **Every model number, with no network and no API key.** Each model call is recorded in [`runs/llm/`](runs/llm), keyed by a hash of the request, and `--offline` replays a run from that record. The tools recompute their results from the downloaded data, so the verifier re-checks every citation.
@@ -288,7 +296,7 @@ modal deploy scripts/finetune/modal_app.py               # vLLM: base and adapte
 ## Limitations
 
 - **Benchmarks are cleaner than production.** RCAEval injects one fault at a time into three demo systems. Real outages overlap, cascade and come with noisier telemetry.
-- **Detection is the weak link end to end.** It misses 52 of RE3's 81 outages, and the SMD detectors trade precision against recall at F1 0.11–0.31.
+- **Detection is the weak link end to end.** Even with error logs it misses 30 of RE3's 81 outages (52 with metrics alone), and the SMD detectors trade precision against recall at F1 0.11–0.31. The log signal's settings were chosen where they did no harm on train, not where they were shown to help, because the train split has none of the outage types it later caught.
 - **The live lab is small.** 10 services, four fault types, and calibration batches of nine outages: a demonstration, not a benchmark.
 - **The fine-tuned model still trails the hosted one** on first place for RE1 and RE3. It learned from Spark's actions and short notes; Spark's full reasoning is not available to learn from.
 - **In this demo Glimmer runs on a rented cloud GPU.** Keeping telemetry on your own hardware is what open weights make possible, not what this deployment does.
