@@ -30,6 +30,7 @@ def test_console_and_health(client):
     assert client.get("/api/health").json() == {"ok": True}
     page = client.get("/")
     assert page.status_code == 200 and "Epicenter" in page.text
+    assert page.headers["cache-control"] == "no-cache"     # a reload after a redeploy gets the new page
 
 
 def test_replay_hides_the_answer_until_reveal(client):

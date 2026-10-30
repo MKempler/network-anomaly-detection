@@ -487,4 +487,5 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 @app.get("/")
 def console():
-    return FileResponse(STATIC / "console.html")
+    # browsers revalidate on every load, so a reload after a redeploy always gets the new page
+    return FileResponse(STATIC / "console.html", headers={"Cache-Control": "no-cache"})
