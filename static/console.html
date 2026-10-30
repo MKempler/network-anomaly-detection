@@ -89,7 +89,7 @@ nav button.theme { width: 48px; padding: 0; }
 .strip { display: grid; grid-template-columns: 168px 1fr 64px; border-bottom: 1px solid var(--rule); height: 52px; }
 .strip .name { padding: 8px 12px; border-right: 1px solid var(--rule); overflow: hidden; }
 .strip .name b { display: block; font: 500 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.strip .name span { font: 400 11px var(--mono); color: var(--ink-3); }
+.strip .name span { display: block; font: 400 11px var(--mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .strip canvas { width: 100%; height: 51px; display: block; cursor: crosshair; }
 .strip .val { padding: 8px 10px 0; text-align: right; font: 500 12px var(--mono); border-left: 1px solid var(--rule); color: var(--ink-2); }
 .axis { display: grid; grid-template-columns: 168px 1fr 64px; height: 22px; border-bottom: 1px solid var(--rule); }
@@ -515,7 +515,7 @@ function mountStrips(id, series, domain, marks) {
     const row = el("div", "strip");
     // the service is printed underneath, so the label drops it: checkoutservice_latency -> latency
     const short = s.metric.startsWith(s.service + "_") ? s.metric.slice(s.service.length + 1) : s.metric;
-    const name = el("div", "name"); name.title = s.metric; name.append(el("b", null, short), el("span", null, s.service)); row.append(name);
+    const name = el("div", "name"); name.title = `${s.metric} · ${s.service}`; name.append(el("b", null, short), el("span", null, s.service)); row.append(name);
     const canvas = el("canvas"); row.append(canvas);
     const val = el("div", "val num", ""); row.append(val);
     root.append(row);
