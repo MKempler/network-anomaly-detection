@@ -24,7 +24,9 @@ Rankers:
 By default the investigation is anchored at the benchmark's inject time, which
 is how RCAEval gives it to every published method. With --anchor detector, our
 own detector (src/anchor.py) picks the start instead, and a case it never flags
-is a recorded miss for every ranker; those runs write *_detector files. Model calls go through the
+is a recorded miss for every ranker; those runs write *_detector files. With
+--anchor detector-logs the detector also watches error logs (eval-spec-v1.4)
+and the runs write *_detector_logs files. Model calls go through the
 record-and-replay cache at runs/llm/<ranker>_<suite>.jsonl.gz; --offline
 replays it with no network access. Per-case rankings, verification and agent
 trails go to runs/explain/, and a summary line goes to runs/explain_summary.jsonl.
@@ -43,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.agent import investigate  # noqa: E402
-from src.anchor import detector_anchor  # noqa: E402
+from src.anchor import end_to_end_anchor  # noqa: E402
 from src.cache import ModelCache  # noqa: E402
 from src.config import DEFAULT  # noqa: E402
 from src.evaluate_explain import (CaseResult, bootstrap_ci, breakdown, calibration, hits, mcnemar,  # noqa: E402
@@ -103,6 +105,10 @@ def run_case(ranker, suite, case_id, case_dir, anchor, cache, model) -> dict:
             "seconds": round(time.time() - started, 1), "trail": trail}
 
 
+ANCHOR_MODES = {"inject": "", "detector": "_detector", "detector-logs": "_detector_logs"}   # file suffixes
+ANCHOR_NAMES = {"inject": "inject_time", "detector": "detector", "detector-logs": "detector+logs"}
+
+
 def baseline_records(method, suite, suffix="") -> dict:
     path = ROOT / "runs" / "baselines" / f"{method}_{suite}{suffix}.jsonl"
     out = {}
@@ -139,10 +145,10 @@ def main():
     parser.add_argument("--limit", type=int, help="only the first N cases (development)")
     parser.add_argument("--offline", action="store_true", help="replay model calls from the cache only")
     parser.add_argument("--no-record", action="store_true")
-    parser.add_argument("--anchor", default="inject", choices=["inject", "detector"],
+    parser.add_argument("--anchor", default="inject", choices=list(ANCHOR_MODES),
                         help="start the investigation at the inject time (default) or where our detector flags")
     args = parser.parse_args()
-    suffix = "" if args.anchor == "inject" else "_detector"
+    suffix = ANCHOR_MODES[args.anchor]
 
     cfg = DEFAULT
     provider = LLM_RANKERS[args.ranker][1] if args.ranker in LLM_RANKERS else None
@@ -155,9 +161,9 @@ def main():
     if args.anchor == "inject":
         anchors = {c: labels[c].inject_time for c in ids}
     else:
-        anchors = {c: detector_anchor(load_case(args.suite, c, index[c]), cfg.anchor) for c in ids}
+        anchors = {c: end_to_end_anchor(args.anchor, args.suite, c, index[c], cfg) for c in ids}
     anchor_stats = None
-    if args.anchor == "detector":
+    if args.anchor != "inject":
         offsets = [None if anchors[c] is None else anchors[c] - labels[c].inject_time for c in ids]
         anchor_stats = {"never": sum(o is None for o in offsets),
                         "early": sum(o is not None and o < 0 for o in offsets),
@@ -225,7 +231,8 @@ def main():
 
     if args.no_record or args.limit:
         return
-    sections = ("investigation", "stats") if args.anchor == "inject" else ("investigation", "stats", "anchor")
+    sections = {"inject": ("investigation", "stats"), "detector": ("investigation", "stats", "anchor"),
+                "detector-logs": ("investigation", "stats", "anchor", "log_anchor")}[args.anchor]
     out_dir = ROOT / "runs" / "explain"
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / f"{args.ranker}_{args.suite}_{args.part}{suffix}.jsonl", "w") as f:
@@ -233,7 +240,7 @@ def main():
             f.write(json.dumps(r, default=str) + "\n")
     entry = {"run_id": uuid.uuid4().hex[:12], "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
              "git_commit": commit, "git_dirty": dirty, "suite": args.suite, "part": args.part,
-             "ranker": args.ranker, "anchor": "inject_time" if args.anchor == "inject" else "detector",
+             "ranker": args.ranker, "anchor": ANCHOR_NAMES[args.anchor],
              "anchor_stats": anchor_stats,
              "provider": provider, "model": model,
              "config_id": cfg.section_id(*sections), "config": cfg.sections(*sections),

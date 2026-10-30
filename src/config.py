@@ -81,6 +81,22 @@ class Anchor:
 
 
 @dataclass(frozen=True)
+class LogAnchor:
+    """End-to-end mode with logs (eval-spec-v1.4): each service's error lines as a second alarm signal.
+
+    Chosen on train cases only (scripts/tune_anchor.py, runs/anchor_tuning.jsonl). No setting beat the
+    metric-only detector on its objective there, because RE3's nine train cases have no Train Ticket
+    outages and only two fault types; so, by a rule fixed before any test run, this is the setting that
+    leaves every train anchor unchanged and whose log signal alone anchors the most train cases within
+    0-120 s of the fault (11 of 117 with logs, none early). Harmless on train, not shown to gain.
+    """
+    window_s: int = 60              # error lines counted over the last minute
+    threshold_sigma: float = 30.0   # this far above the service's history mean (spread floored at sqrt(mean), 1)
+    persist_s: int = 10             # ...for this long
+    min_count: int = 30             # and at least this many lines in the window
+
+
+@dataclass(frozen=True)
 class Live:
     """Live-outage lab. Not part of any evaluation spec; tuned on the running lab."""
     history_s: int = 240            # normal reference: the minutes before each incident
@@ -113,6 +129,7 @@ class Config:
     lstm: LSTMAutoencoder = field(default_factory=LSTMAutoencoder)
     investigation: Investigation = field(default_factory=Investigation)
     anchor: Anchor = field(default_factory=Anchor)
+    log_anchor: LogAnchor = field(default_factory=LogAnchor)
     live: Live = field(default_factory=Live)
 
     def sections(self, *names: str) -> dict:

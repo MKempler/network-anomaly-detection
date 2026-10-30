@@ -37,18 +37,21 @@ LABELS = {"baro": "BARO (published)", "nsigma": "N-Sigma (published)", "mmbaro":
           "spark-agent-noisy": "Spark agent, noisy metrics", "spark-agent-late": "Spark agent, alarm 60 s late"}
 
 
+SUFFIX = {"inject": "", "detector": "_detector", "detector-logs": "_detector_logs"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--suite", required=True, choices=["RE1", "RE2", "RE3"])
     parser.add_argument("--part", default="test", choices=["train", "test"])
     parser.add_argument("--markdown", action="store_true")
-    parser.add_argument("--anchor", default="inject", choices=["inject", "detector"])
+    parser.add_argument("--anchor", default="inject", choices=["inject", "detector", "detector-logs"])
     args = parser.parse_args()
 
     index, labels = case_index(args.suite), load_labels(args.suite)
     results = {}
     for ranker in ORDER:
-        suffix = "" if args.anchor == "inject" else "_detector"
+        suffix = SUFFIX[args.anchor]
         path = ROOT / "runs" / "explain" / f"{ranker}_{args.suite}_{args.part}{suffix}.jsonl"
         if path.exists():
             results[ranker] = to_results([json.loads(line) for line in open(path)], index, labels)
@@ -56,8 +59,8 @@ def main():
         sys.exit(f"no records for {args.suite} {args.part} in runs/explain/")
 
     unflagged = set()
-    if args.anchor == "detector":
-        no_ai = ROOT / "runs" / "explain" / f"no-ai_{args.suite}_{args.part}_detector.jsonl"
+    if args.anchor != "inject":
+        no_ai = ROOT / "runs" / "explain" / f"no-ai_{args.suite}_{args.part}{SUFFIX[args.anchor]}.jsonl"
         unflagged = {r["case_id"] for r in map(json.loads, open(no_ai)) if r.get("error") == "detector never flagged"}
     samples, seed = DEFAULT.stats.bootstrap_samples, DEFAULT.stats.seed
     rows = []
@@ -86,7 +89,7 @@ def main():
     for name, s, ci in rows:
         print(f"{name:<40}" + "".join(f"{s[k]:>8.3f} [{ci[k][0]:.3f}, {ci[k][1]:.3f}]" for k in ("ac1", "ac3", "avg5"))
               + f"{s['failed']:>8}")
-    if args.anchor == "detector":
+    if args.anchor != "inject":
         print("\nWhen the detector flagged (cases it never flagged are misses for every ranker):")
         for ranker, rs in results.items():
             flagged = [r for r in rs if r.case_id not in unflagged]

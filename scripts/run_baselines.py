@@ -20,7 +20,9 @@ Each case is prepared exactly as RCAEval 1.8.1's main.py prepares it:
 
 The inject time is given to these methods, as in RCAEval's protocol. With
 --anchor detector the methods get our detector's flag time instead (as
-RCAEval's --tdelta shifts it), and write *_detector files. Ranked
+RCAEval's --tdelta shifts it), and write *_detector files; with --anchor
+detector-logs the detector also watches error logs (eval-spec-v1.4) and the
+files end in _detector_logs. Ranked
 outputs go to runs/baselines/<method>_<suite>.jsonl under opaque case ids, and
 src/evaluate_explain.py scores them with the same scorer as every other ranker.
 """
@@ -41,9 +43,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 warnings.filterwarnings("ignore")
 
-from src.anchor import detector_anchor  # noqa: E402
+from src.anchor import end_to_end_anchor  # noqa: E402
 from src.config import DEFAULT  # noqa: E402
-from src.load_rcaeval import METRICS_FILE, case_index, load_case  # noqa: E402
+from src.load_rcaeval import METRICS_FILE, case_index  # noqa: E402
 
 LENGTH_MIN = 20                      # RCAEval main.py default
 METRIC_ROWS = LENGTH_MIN * 60 // 2   # rows on each side of the inject time
@@ -84,9 +86,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--suite", required=True, choices=sorted(METRICS_FILE))
     parser.add_argument("--method", nargs="+", required=True, choices=["baro", "nsigma", "mmbaro"])
-    parser.add_argument("--anchor", default="inject", choices=["inject", "detector"])
+    parser.add_argument("--anchor", default="inject", choices=["inject", "detector", "detector-logs"])
     args = parser.parse_args()
-    suffix = "" if args.anchor == "inject" else "_detector"
+    suffix = {"inject": "", "detector": "_detector", "detector-logs": "_detector_logs"}[args.anchor]
 
     from RCAEval.e2e import baro, mmbaro, nsigma  # imported here: only the baselines venv has RCAEval
     methods = {"baro": baro, "nsigma": nsigma, "mmbaro": mmbaro}
@@ -94,8 +96,8 @@ def main():
                             text=True, check=True).stdout.strip()
     index = case_index(args.suite)
     anchors = {}
-    if args.anchor == "detector":
-        anchors = {c: detector_anchor(load_case(args.suite, c, d), DEFAULT.anchor) for c, d in index.items()}
+    if args.anchor != "inject":
+        anchors = {c: end_to_end_anchor(args.anchor, args.suite, c, d, DEFAULT) for c, d in index.items()}
     out_dir = ROOT / "runs" / "baselines"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -109,7 +111,7 @@ def main():
             for case_id, case_dir in index.items():
                 record = {"case_id": case_id, "method": name, "suite": args.suite, "anchor": args.anchor,
                           "rcaeval_version": version("RCAEval"), "length_min": LENGTH_MIN, "git_commit": commit}
-                if args.anchor == "detector" and anchors[case_id] is None:
+                if args.anchor != "inject" and anchors[case_id] is None:
                     failures += 1
                     record["error"] = "detector never flagged"
                     f.write(json.dumps(record) + "\n")
