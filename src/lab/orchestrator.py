@@ -21,6 +21,7 @@ server that scales to zero starts while the fault settles and the alarm fires.
 """
 
 import hashlib
+import ipaddress
 import json
 import queue
 import threading
@@ -39,6 +40,20 @@ from src.tools import Investigation
 
 RECORDS = Path(__file__).resolve().parents[2] / "runs" / "live" / "incidents.jsonl"
 DEFAULT_MODEL = "spark-open"
+
+
+def visitor_key(address: str) -> str:
+    """Who a request comes from, for rate limits: an IPv4 address, or an IPv6 host's whole /64, since one
+    IPv6 connection gets billions of addresses to rotate through."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if ip.version == 4:
+        return str(ip)
+    if ip.ipv4_mapped is not None:
+        return str(ip.ipv4_mapped)
+    return str(ipaddress.ip_network(f"{ip}/64", strict=False))
 
 
 @dataclass
@@ -87,7 +102,7 @@ class Lab:
 
     @staticmethod
     def visitor_id(address: str) -> str:
-        return hashlib.sha256(address.encode()).hexdigest()[:12]
+        return hashlib.sha256(visitor_key(address).encode()).hexdigest()[:12]
 
     def submit(self, service: str, fault: str, address: str, model: str = DEFAULT_MODEL) -> Incident:
         if service not in TARGETS or fault not in FAULTS or model not in self.models:
