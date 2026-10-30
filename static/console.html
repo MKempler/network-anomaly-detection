@@ -424,7 +424,10 @@ table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /*
       <div id="study-tool" hidden>
         <div class="block"><h3 class="label">Epicenter · flight log</h3></div>
         <div class="log scroll" id="study-log" style="max-height:34vh"></div>
-        <div class="block"><h3 class="label">Epicenter · verdict</h3><table class="verdict" id="study-verdict"></table></div>
+        <div class="block"><h3 class="label">Epicenter · verdict</h3>
+          <p class="note-sm" style="margin:0 0 10px"><b>Verified</b>: a fixed checker confirmed that the evidence this cause cites really is abnormal. <b>Rejected</b>: that evidence didn't hold up.
+            Point at an evidence tag such as c12 to highlight the tool call it comes from in the flight log.</p>
+          <table class="verdict" id="study-verdict"></table></div>
       </div>
       <div class="block">
         <h3 class="label">Your answer · which service caused this outage?</h3>
@@ -436,7 +439,7 @@ table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /*
     </div>
   </div>
   <div id="study-exit" class="evidence" hidden>
-    <h1>Last three questions</h1>
+    <h1>Last questions</h1>
     <div class="label" style="margin:18px 0 6px">Would you use a tool like Epicenter on call? (1 = no, 5 = definitely)</div>
     <div class="picker" id="study-use" style="grid-template-columns: repeat(5, 1fr); max-width: 420px"></div>
     <div class="label" style="margin:18px 0 6px">Anything it would need, or anything that got in your way?</div>
@@ -693,7 +696,7 @@ function renderVerdict(id, causes, error, ctx) {
       const stamp = el("span", "stamp " + (c.verified ? "ok" : "bad"), c.verified ? "verified" : "rejected"); stamp.title = c.verification; td.append(stamp);
     }
     for (const cid of c.evidence || []) {
-      const cite = el("span", "cite", cid); cite.tabIndex = 0;
+      const cite = el("span", "cite", cid); cite.tabIndex = 0; cite.title = "Highlights the tool call this evidence comes from in the flight log";
       const hl = (on) => document.querySelectorAll(`.line[data-call="${CSS.escape(cid)}"]`).forEach((n) => { n.classList.toggle("hl", on); if (on) n.scrollIntoView({ block: "nearest" }); });
       cite.onmouseenter = cite.onfocus = () => hl(true); cite.onmouseleave = cite.onblur = () => hl(false);
       td.append(cite);
