@@ -7,6 +7,9 @@
 
 {$SITE_ADDRESS} {
 	encode gzip
+	request_body {
+		max_size 2MB    # the largest legitimate request is a metric stream posted to /api/detect
+	}
 	reverse_proxy 127.0.0.1:8000 {
 		flush_interval -1    # stream the live lab's server-sent events as they happen
 	}

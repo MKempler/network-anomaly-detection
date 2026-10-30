@@ -26,6 +26,12 @@ dpkg-reconfigure -f noninteractive unattended-upgrades
 sed -i -E 's/^#?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
 systemctl try-reload-or-restart ssh   # 24.04 starts sshd on demand, so it may not be running yet
 
+# Container logs rotate, so a flood of requests can't fill the disk.
+if [ ! -f /etc/docker/daemon.json ]; then
+  printf '{"log-driver": "json-file", "log-opts": {"max-size": "50m", "max-file": "3"}}\n' > /etc/docker/daemon.json
+  systemctl restart docker
+fi
+
 # A little swap, so building images can't run the server out of memory.
 if ! swapon --show | grep -q /swapfile; then
   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
