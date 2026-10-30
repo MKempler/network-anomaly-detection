@@ -821,8 +821,8 @@ async function renderEvidence() {
   const loading = el("p", "note-sm ev-note", "Loading the recorded runs…");
   root.append(el("h1", null, "Every number comes from a recorded, reproducible run"), lede, loading);
   const suites = ["RE1", "RE2", "RE3"];
-  const [inject, flagged] = await Promise.all([Promise.all(suites.map((s) => api(`/api/results?suite=${s}`))),
-                                               Promise.all(suites.map((s) => api(`/api/results?suite=${s}&anchor=detector`)))]);
+  const results = (anchor) => Promise.all(suites.map((s) => api(`/api/results?suite=${s}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`)));
+  const [inject, flagged, flaggedLogs] = await Promise.all([results(""), results("detector"), results("detector+logs")]);
   loading.remove();
   for (const data of inject) {
     const suite = data.suite, robust = data.rankers;
@@ -842,7 +842,7 @@ async function renderEvidence() {
     root.append(t);
     if (robust.some((r) => DEGRADED.has(r.ranker))) renderRobustness(root, robust);
   }
-  renderEndToEnd(root, flagged);
+  renderEndToEnd(root, flaggedLogs, flagged);
   await renderTrust(root).catch(() => {});
   const det = await api("/api/detection");
   const t = el("table", "etable"); t.append(colgroup(["m", "s", "s", "v", "b", "f"])); const cap = el("caption"); cap.append(el("span", "label", "Detection · 28 SMD servers · event-level scoring, no point adjustment")); t.append(cap);
@@ -869,22 +869,31 @@ function renderRobustness(root, rankers) {
     "(p = 0.012): one of the two is enough for the network faults that metrics miss."));
 }
 
-/* End to end: nothing is told the fault time; our detector's flag anchors the investigation. */
-function renderEndToEnd(root, suites) {
+/* End to end: nothing is told the fault time; our detector's flag anchors the investigation.
+   v1.4 watches metrics and error logs; v1, metrics only. */
+function renderEndToEnd(root, withLogs, metricsOnly) {
   const pick = (data, ranker) => data.rankers.find((r) => r.ranker === ranker);
-  const spark = suites.map((d) => pick(d, "spark-agent-all")), nsigma = suites.map((d) => pick(d, "nsigma"));
-  if (spark.some((r) => !r || r.unflagged == null)) return;
+  const rows = (suites) => {
+    const spark = suites.map((d) => pick(d, "spark-agent-all")), nsigma = suites.map((d) => pick(d, "nsigma"));
+    if (spark.some((r) => !r || r.unflagged == null)) return null;
+    const fmt = (r) => (r ? r.ac1.toFixed(3) : "–");
+    return [["Outages the detector flagged", ...spark.map((r) => `${r.cases - r.unflagged} of ${r.cases}`)],
+            ["N-Sigma (published), all outages", ...nsigma.map(fmt)],
+            ["Muse Spark agent (hosted), all outages", ...spark.map(fmt)],
+            ["Muse Spark agent (hosted), flagged outages only", ...spark.map((r) => (Math.round(r.ac1 * r.cases) / (r.cases - r.unflagged)).toFixed(3))]];
+  };
+  const v14 = rows(withLogs), v1 = rows(metricsOnly);
+  if (!v1) return;
   root.append(el("h2", "ev-h2", "End to end: our detector chooses where to look"),
-              el("p", "lede", "Here nothing is told the fault time. Our detector's flag anchors the investigation, and an outage it never flags is a miss for every method."));
-  const fmt = (r) => (r ? r.ac1.toFixed(3) : "–");
-  root.append(simpleTable("Top-1 accuracy, detector-anchored · held-out test outages", ["", ...suites.map((d) => d.suite)], [
-    ["Outages the detector flagged", ...spark.map((r) => `${r.cases - r.unflagged} of ${r.cases}`)],
-    ["N-Sigma (published), all outages", ...nsigma.map(fmt)],
-    ["Muse Spark agent (hosted), all outages", ...spark.map(fmt)],
-    ["Muse Spark agent (hosted), flagged outages only", ...spark.map((r) => (Math.round(r.ac1 * r.cases) / (r.cases - r.unflagged)).toFixed(3))],
-  ], ["m", "s", "s", "s"]));
-  root.append(el("p", "note-sm ev-note", "When the detector fires, the agent is about as accurate as when it is handed the fault time. " +
-    "Detection is the bottleneck, above all on RE3's code-level faults, which often leave little trace in the metrics the detector watches."));
+              el("p", "lede", "Here nothing is told the fault time. Our detector's flag anchors the investigation, and an outage it never flags is a miss for every method. " +
+                 "When the detector fires, the agent is about as accurate as when it is handed the fault time, so detection is the bottleneck."));
+  const head = ["", ...metricsOnly.map((d) => d.suite)];
+  if (v14) root.append(simpleTable("Top-1 accuracy · detector watching metrics and error logs (v1.4)", head, v14, ["m", "s", "s", "s"]));
+  root.append(simpleTable("Top-1 accuracy · detector watching metrics only (v1)", head, v1, ["m", "s", "s", "s"]));
+  if (v14) root.append(el("p", "note-sm ev-note", "RE3's code-level faults often leave CPU, memory and latency normal while the broken service logs exceptions, " +
+    "so the detector also watches each service's error lines against its normal rate. On RE3 hosted Spark goes from 0.346 to 0.617 end to end " +
+    "(23 outages gained, 1 lost, exact McNemar p = 3e-6). RE1 has no logs and RE2's start times are unchanged; their differences are run-to-run variation. " +
+    "The log settings were frozen on train cases before any test run, chosen as harmless rather than shown to help, since the train split has none of the outage types it later caught."));
 }
 
 /* Trust: escalation, why misses missed, cost. From runs/trust_summary.jsonl (scripts/report_trust.py). */
