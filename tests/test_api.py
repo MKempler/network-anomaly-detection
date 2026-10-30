@@ -259,3 +259,33 @@ def test_detector_anchored_results_count_the_outages_never_flagged(client):
     flagged = {r["ranker"]: r for r in client.get("/api/results?suite=RE3&anchor=detector").json()["rankers"]}
     assert flagged["spark-agent-all"]["unflagged"] == flagged["nsigma"]["unflagged"] == 52
     assert all("unflagged" not in r for r in client.get("/api/results?suite=RE3").json()["rankers"])
+
+
+def test_an_ipv6_network_counts_as_one_visitor():
+    from src.lab.orchestrator import visitor_key
+    assert visitor_key("2a01:4f9:c014:7519::1") == visitor_key("2a01:4f9:c014:7519:ffff:1:2:3") == "2a01:4f9:c014:7519::/64"
+    assert visitor_key("203.0.113.7") == "203.0.113.7" != visitor_key("203.0.113.8")
+    assert visitor_key("::ffff:203.0.113.7") == "203.0.113.7"
+
+
+def test_study_takes_only_issued_or_dry_run_codes(client, tmp_path, monkeypatch):
+    import src.api as api
+    monkeypatch.setattr(api, "STUDY", tmp_path)
+    (tmp_path / "plan.json").write_text(json.dumps({"slots": [[]], "cases": ["c1"]}))
+    monkeypatch.setenv("STUDY_CODES", "p-7f3a, p-91bc")
+    answer = {"slot": 0, "case_id": "c1", "tool": True, "answer": "cart", "confidence": 3, "seconds": 9.5}
+    assert client.post("/api/study/answer", json={**answer, "participant": "p-7f3a"}).status_code == 200
+    assert client.post("/api/study/answer", json={**answer, "participant": "dry-max"}).status_code == 200
+    assert client.post("/api/study/answer", json={**answer, "participant": "made-up"}).status_code == 403
+    assert client.post("/api/study/exit", json={"participant": "made-up", "would_use": 5}).status_code == 403
+
+
+def test_writes_are_limited_per_visitor(client, live, monkeypatch, tmp_path):
+    import src.api as api
+    monkeypatch.setattr(api, "ROOT", tmp_path)
+    monkeypatch.setattr(api, "_writes", {})
+    vote = {"incident_id": "abc", "vote": "up"}
+    codes = [client.post("/api/live/feedback", json=vote, headers={"x-forwarded-for": "198.51.100.9"}).status_code
+             for _ in range(api.WRITES_PER_HOUR + 1)]
+    assert codes[:-1] == [200] * api.WRITES_PER_HOUR and codes[-1] == 429
+    assert client.post("/api/live/feedback", json=vote, headers={"x-forwarded-for": "198.51.100.10"}).status_code == 200

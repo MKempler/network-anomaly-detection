@@ -9,7 +9,7 @@
 set -euo pipefail
 server="$1"; site="${2:-}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
-keys='^(BASETEN_API_KEY|LIVE_GLIMMER|GLIMMER_BASE_URL|GLIMMER_API_KEY|MODAL_PROXY_KEY|MODAL_PROXY_SECRET|SLACK_WEBHOOK_URL)='
+keys='^(BASETEN_API_KEY|LIVE_GLIMMER|GLIMMER_BASE_URL|GLIMMER_API_KEY|MODAL_PROXY_KEY|MODAL_PROXY_SECRET|SLACK_WEBHOOK_URL|STUDY_CODES)='
 {
   grep -E "$keys" "$here/.env" || true
   [ -n "$site" ] && echo "CONSOLE_URL=https://$site"

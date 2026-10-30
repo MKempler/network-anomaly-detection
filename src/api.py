@@ -63,6 +63,7 @@ from src.anchor import detector_anchor
 from src.config import DEFAULT
 from src.db import DetectionRun, EvalResult, setup
 from src.integrations import parse_alertmanager, slack_message
+from src.lab.orchestrator import visitor_key
 from src.load_rcaeval import Case, service_of
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -370,9 +371,29 @@ class Feedback(BaseModel):
     comment: str = Field(default="", max_length=500)
 
 
+# Writes that only append to a file (feedback, study answers) are cheap, but nothing else stops a script
+# from filling the disk or the study with junk; a visitor gets this many per hour.
+WRITES_PER_HOUR = 40
+_writes: dict[str, list[float]] = {}
+_writes_lock = threading.Lock()
+
+
+def _throttle(request: Request):
+    key, now = visitor_key(_visitor(request)), datetime.now(timezone.utc).timestamp()
+    with _writes_lock:
+        recent = [t for t in _writes.get(key, []) if now - t < 3600]
+        if len(recent) >= WRITES_PER_HOUR:
+            raise HTTPException(429, "too many submissions from your network; try again later")
+        _writes[key] = recent + [now]
+        if len(_writes) > 10_000:                      # forget visitors with nothing recent
+            for k in [k for k, ts in _writes.items() if not ts or now - ts[-1] >= 3600]:
+                del _writes[k]
+
+
 @app.post("/api/live/feedback")
 def live_feedback(body: Feedback, request: Request):
     _lab(request)
+    _throttle(request)
     path = ROOT / "runs" / "live" / "feedback.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     entry = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **body.model_dump()}
@@ -465,8 +486,18 @@ def _append(name: str, entry: dict):
         f.write(json.dumps({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **entry}) + "\n")
 
 
+def _participant(code: str):
+    """With STUDY_CODES set (the codes handed out, comma-separated), only those and dry-run codes may answer,
+    so nobody can add made-up participants to the results."""
+    issued = {c.strip().lower() for c in os.environ.get("STUDY_CODES", "").split(",") if c.strip()}
+    if issued and code.lower() not in issued and not code.lower().startswith("dry"):
+        raise HTTPException(403, "unknown participant code; use the link you were sent")
+
+
 @app.post("/api/study/answer")
-def study_answer(body: StudyAnswer):
+def study_answer(body: StudyAnswer, request: Request):
+    _participant(body.participant)
+    _throttle(request)
     if body.case_id not in _study_plan()["cases"]:
         raise HTTPException(404, "unknown case")
     _append("answers.jsonl", body.model_dump())
@@ -474,7 +505,9 @@ def study_answer(body: StudyAnswer):
 
 
 @app.post("/api/study/exit")
-def study_exit(body: StudyExit):
+def study_exit(body: StudyExit, request: Request):
+    _participant(body.participant)
+    _throttle(request)
     entry = body.model_dump()
     if not entry["quote_ok"]:
         entry["display_name"] = ""          # a name is kept only with permission to quote
