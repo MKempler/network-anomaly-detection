@@ -417,7 +417,7 @@ table.dtable td:first-child { white-space: nowrap; overflow-wrap: normal; }   /*
   </div>
   <div id="study-case" class="frame" hidden>
     <div class="col">
-      <div class="block"><span class="label" id="study-title"></span></div>
+      <div class="block"><span class="label" id="study-title"></span><div class="note-sm" id="study-saved" role="status"></div></div>
       <div class="strips" id="study-strips"></div>
     </div>
     <div class="col" style="grid-column: span 2">
@@ -1177,8 +1177,13 @@ $("#study-submit").onclick = async () => {
   const answer = document.querySelector("input[name=study-answer]:checked")?.value, conf = document.querySelector("input[name=study-conf]:checked")?.value;
   if (!answer || !conf) { $("#study-msg").textContent = "pick a service and a confidence"; return; }
   const item = study.cases[study.at], seconds = Math.round((performance.now() - study.opened) / 100) / 10;
-  await api("/api/study/answer", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ participant: study.code, slot: study.slot, case_id: item.case_id, tool: item.tool, answer, confidence: Number(conf), seconds }) });
+  const button = $("#study-submit"); button.disabled = true; $("#study-msg").textContent = "saving…";
+  try {
+    await api("/api/study/answer", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ participant: study.code, slot: study.slot, case_id: item.case_id, tool: item.tool, answer, confidence: Number(conf), seconds }) });
+  } catch (e) { $("#study-msg").textContent = "couldn't save that answer; check your connection and press Submit again"; return; }
+  finally { button.disabled = false; }
+  $("#study-msg").textContent = ""; $("#study-saved").textContent = `Your answer to outage ${study.at + 1} was saved.`;
   study.at += 1;
   if (study.at < study.cases.length) return openStudyCase();
   $("#study-case").hidden = true; $("#study-exit").hidden = false;
@@ -1188,10 +1193,12 @@ $("#study-submit").onclick = async () => {
 $("#study-finish").onclick = async () => {
   const use = document.querySelector("input[name=study-use]:checked")?.value;
   if (!use) { $("#study-done").textContent = "pick 1 to 5"; return; }
-  await api("/api/study/exit", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ participant: study.code, would_use: Number(use), comment: $("#study-comment").value, quote_ok: $("#study-quote").checked, display_name: $("#study-name").value }) });
-  $("#study-done").textContent = "Thank you. You can close this tab.";
   $("#study-finish").disabled = true;
+  try {
+    await api("/api/study/exit", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ participant: study.code, would_use: Number(use), comment: $("#study-comment").value, quote_ok: $("#study-quote").checked, display_name: $("#study-name").value }) });
+  } catch (e) { $("#study-finish").disabled = false; $("#study-done").textContent = "couldn't save; check your connection and press Finish again"; return; }
+  $("#study-done").textContent = "Thank you. You can close this tab.";
 };
 
 /* ---- deep links: #live, #evidence, #replay, #replay/RE2/<case id>[/play] ---- */
